@@ -5,7 +5,7 @@ import torch
 import numpy as npf
 import torch.functional as F
 from typing import Callable, Dict, Tuple
-
+import numpy as np
 class Model_Instance():
     def __init__(self,
                  model:torch.nn.Module,
@@ -53,18 +53,60 @@ class Model_Instance():
 
         return  pred, loss, evaluate_dict
 
-    def inference(self,feature):
-        feature = feature.to(self.device)
-        pred = self.model(feature)
+    def run_one_epoch(self,dataloader,logger=None,update=True):
+        pred_list=[]
+        loss_list=[]
+        if update:
+            self.model.train()
+        else:
+            self.model.eval()
+
+        trange = tqdm(dataloader,total=len(dataloader))
+        for data,label in dataloader :
+            data=data.long()# for gpu
+            label=label.long()# for gpu
+            pred,loss, eval_dict = self.run_model(data,label,update=update)
+            pred_list.append(pred)
+            loss_list.append(loss)
+
+            logger(loss=loss,**eval_dict)
+            avg_log = logger.get_current_epoch_avg()
+            trange.set_postfix(loss=avg_log['loss'],**eval_dict)
+            trange.update()
+        logger.save_epoch()
+        pred_list = np.concatenate(pred_list,axis=0)
+        return pred_list,loss_list
+
+    def evaluation(self,dataloader):
+        pred_list=[]
+        self.model.eval()
+
+        trange = tqdm(dataloader,total=len(dataloader))
+        for data in dataloader :
+            data=data.long()
+            pred= self.inference(data)
+            pred_list.append(pred)
+            trange.update()
+
+        pred_list = np.concatenate(pred_list,axis=0)
+        return pred_list
+
+    def inference(self,data):
+        data = data.to(self.device)
+        pred = self.model(data)
         return pred
 
-    def save_model(self,path=None):
-        path = path if path else self.save_model_path
-        torch.save(self.model.state_dict(),path)
+    def save(self,path=None,only_model=True):
+        if only_model
+            path = path if path else self.save_model_path
+            torch.save(self.model.state_dict(),path)
+        else:
+            pass
 
     def load_model(self,path=None):
         path = path if path else self.save_model_path
         self.model.load_state_dict(torch.load(path))
+
 
 # def create_model_instance(args):
 #     global num_class
@@ -76,10 +118,7 @@ class Model_Instance():
 #         predict_category = predict.argmax(axis=1)
 
 #         #ont_hot_label = one_hot(label)
-#         # precision, recall, f1,_ = precision_recall_fscore_support(label,
-#         #                                                         predict_category,
-#         #                                                         average='macro')
-
+#         #precision, recall, f1,_ = precision_recall_fscore_support(label,predict_category,average='macro')
 #         #auroc = roc_auc_score(label,predict,average='macro')
 #         acc= accuracy_score(label,predict_category)
 #         evaluation_dict['acc'] =acc
@@ -88,13 +127,13 @@ class Model_Instance():
 #         # evaluation_dict['precision'] = precision
 #         # evaluation_dict['auroc'] = auroc
 #         return evaluation_dict
-def loss_function(self,pred,label):
-    global num_class
-    def one_hot(x,num_class=num_class):
-        return torch.eye(num_class)[x,:]
+#     def loss_function(self,pred,label):
+#         global num_class
+#         def one_hot(x,num_class=num_class):
+#             return torch.eye(num_class)[x,:]
 
-    one_hot_label=one_hot(label)
-    return nn.CrossEntropyLoss()(pred,label) + bi_tempered_logistic_loss(pred,one_hot_label.to('cuda'),t1=0.5,t2=2.0)
+#     one_hot_label=one_hot(label)
+#     return nn.CrossEntropyLoss()(pred,label) + bi_tempered_logistic_loss(pred,one_hot_label.to('cuda'),t1=0.5,t2=2.0)
 
 
 #     model = torch.nn.Module
@@ -107,53 +146,3 @@ def loss_function(self,pred,label):
 #                          evaluation_function=evaluation_function,
 #                          scheduler=scheduler,
 #                          save_model_path=args.ckpt_dir/'best_model.pkl')
-# def run_one_epoch(model_instance:Model_Instance,dataloader,logger=None,update=True):
-#     pred_list=[]
-#     loss_list=[]
-#     if update:
-#         model_instance.model.train()
-#     else:
-#         model_instance.model.eval()
-
-#     trange = tqdm(dataloader,total=len(dataloader))
-#     for batch in dataloader :
-#         batch['tokens']=batch['tokens'].long()# for gpu
-#         batch['intent']=batch['intent'].long()# for gpu
-#         batch['len']=batch['len'].int()
-#         pred,loss, eval_dict = model_instance.run_model(batch['tokens'],
-#                                                         batch['intent'],
-#                                                         batch['len'],
-#                                                         update=update)
-#         pred_list.append(pred)
-#         loss_list.append(loss)
-
-#         logger(loss=loss,**eval_dict)
-#         avg_log = logger.get_current_epoch_avg()
-#         trange.set_postfix(loss=avg_log['loss'],**eval_dict)
-#         trange.update()
-#     logger.save_epoch()
-#     pred_list = np.concatenate(pred_list,axis=0)
-#     return pred_list,loss_list
-
-# def evaluation(model_instance:Model_Instance,dataloader):
-#     pred_list=[]
-#     model_instance.model.eval()
-
-#     trange = tqdm(dataloader,total=len(dataloader))
-#     for batch in dataloader :
-#         batch['tokens']=batch['tokens'].long()# for gpu
-#         batch['len']=batch['len'].int()
-#         pred,loss, eval_dict = model_instance.run_model(batch['tokens'],
-#                                                         batch['intent'],
-#                                                         batch['len'],
-#                                                         update=update)
-#         pred_list.append(pred)
-#         loss_list.append(loss)
-
-#         logger(loss=loss,**eval_dict)
-#         avg_log = logger.get_current_epoch_avg()
-#         trange.set_postfix(loss=avg_log['loss'],**eval_dict)
-#         trange.update()
-#     logger.save_epoch()
-#     pred_list = np.concatenate(pred_list,axis=0)
-#     return pred_list,loss_list

@@ -117,14 +117,12 @@ class Logger():
 
 
 #教學
-# check_best(self,category='loss',mode='min',unit='epoch')
-# get_best_record(self,category='loss',mode='min',unit='epoch')
+# check_best(category='loss',mode='min',unit='epoch')
+# get_best_record(category='loss',mode='min',unit='epoch')
 # logger.epoch_history['loss'].iloc[-1]
 # logger.save_epoch()
-# plot(show_category=None,figsize=(6.2,3),ylim=None,unit='epoch')
-# logger.set_layer(1)
+# plot(logger_list=[],show_category=None,figsize=(6.2,3),ylim=None,unit='epoch')
 
-# 相同layer繪畫再一起(category要一樣)
 # 無須設定存入變數種類，直接丟即可
 # 可以在plot時設定show_category來選擇顯示參數
 # 如果想看iter版本，plot時unit給iter(非epoch)
