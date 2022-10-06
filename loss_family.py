@@ -1,3 +1,4 @@
+# fork from https://github.com/fhopfmueller/bi-tempered-loss-pytorch
 import torch
 
 def log_t(u, t):

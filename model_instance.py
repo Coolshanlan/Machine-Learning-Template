@@ -6,6 +6,7 @@ import numpy as npf
 import torch.functional as F
 from typing import Callable, Dict, Tuple
 import numpy as np
+from pathlib import Path
 class Model_Instance():
     def __init__(self,
                  model:torch.nn.Module,
@@ -15,15 +16,17 @@ class Model_Instance():
                  evaluation_function:Callable=lambda x,y : {},
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-                 save_model_path:str ='best_model.pkl'):
+                 save_dir:str ='checkpoint'):
         self.model = model.to(device)
-        self.save_model_path = save_model_path
+        self.save_dir = Path(save_dir)
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.loss_fn = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
         self.device = device
+        if not self.save_dir.exists():
+            self.save_dir.mkdir()
 
     def run_model(self,feature,label,update=True)-> Tuple[torch.tensor,torch.tensor,Dict]:
 
@@ -96,15 +99,15 @@ class Model_Instance():
         pred = self.model(data)
         return pred
 
-    def save(self,path=None,only_model=True):
+    def save(self,path=None,only_model=True,filename='model_checkpoint.pkl'):
+        save_path = self.save_dir/filename
         if only_model:
-            path = path if path else self.save_model_path
-            torch.save(self.model.state_dict(),path)
+            torch.save(self.model.state_dict(),save_path)
         else:
             pass
 
     def load_model(self,path=None):
-        path = path if path else self.save_model_path
+        path = path if path else self.save_dir/'model_checkpoint.pkl'
         self.model.load_state_dict(torch.load(path))
 
 
