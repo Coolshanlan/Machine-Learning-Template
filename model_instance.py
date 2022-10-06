@@ -97,7 +97,7 @@ class Model_Instance():
         return pred
 
     def save(self,path=None,only_model=True):
-        if only_model
+        if only_model:
             path = path if path else self.save_model_path
             torch.save(self.model.state_dict(),path)
         else:
