@@ -1,8 +1,6 @@
-from unicodedata import category
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 import pickle
 from pathlib import Path
 
@@ -93,7 +91,8 @@ class Logger():
                     _history=Logger.logger_dict[logger_name]
                     _history = _history.groupby('epoch').mean() if unit == 'epoch' else _history
                     _history = _history.reset_index(drop=True)
-                    sns.lineplot(data=_history,x=range(len(_history)),y=c,ax=axs[cidx],label=logger_name).set(title = '{}'.format(c))
+                    axs[cidx].plot(range(len(_history)),_history[c],label=logger_name)
+                    axs[cidx].set_title('{}'.format(c))
                     axs[cidx].legend(loc='upper left')
                     if c in ylim.keys():
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
@@ -143,9 +142,9 @@ class Logger():
 #    all_logger.save_epoch()
 #    validation_logger.check_best(category='acc',mode='max',unit='epoch')
 
-# Logger.load_logger('logger_dir/logger_history.pkl')
+# #Logger.load_logger('logger_dir/logger_history.pkl')
 # Logger.plot(ylim={'acc':[0,1]})
 
 # Logger.plot(show_category= ['loss','acc'],unit='iter')
 # Logger.plot(['Training','All'])
-# Logger.export_logger()
+# # Logger.export_logger()

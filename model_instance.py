@@ -1,19 +1,22 @@
 from typing_extensions import Self
+from xmlrpc.client import Boolean
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
 import numpy as npf
 import torch.functional as F
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Optional, Tuple
 import numpy as np
 from pathlib import Path
+from tqdm.auto import tqdm
 class Model_Instance():
     def __init__(self,
                  model:torch.nn.Module,
-                 optimizer:torch.optim,
-                 scheduler:torch.optim.lr_scheduler,
-                 loss_function:Callable,
+                 optimizer:torch.optim=None,
+                 scheduler:torch.optim.lr_scheduler=None,
+                 loss_function:Callable=None,
                  evaluation_function:Callable=lambda x,y : {},
+                 scheduler_iter_unit:Boolean = False,
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
                  save_dir:str ='checkpoint'):
@@ -21,6 +24,7 @@ class Model_Instance():
         self.save_dir = Path(save_dir)
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.scheduler_iter_unit=scheduler_iter_unit
         self.loss_fn = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
@@ -56,7 +60,7 @@ class Model_Instance():
 
         return  pred, loss, evaluate_dict
 
-    def run_one_epoch(self,dataloader,logger=None,update=True):
+    def run_dataloader(self,dataloader,logger=None,update=True):
         pred_list=[]
         loss_list=[]
         if update:
@@ -76,11 +80,14 @@ class Model_Instance():
             avg_log = logger.get_current_epoch_avg()
             trange.set_postfix(loss=avg_log['loss'],**eval_dict)
             trange.update()
+            if self.scheduler and self.scheduler_iter_unit:
+                self.scheduler.step()
+
         logger.save_epoch()
         pred_list = np.concatenate(pred_list,axis=0)
         return pred_list,loss_list
 
-    def evaluation(self,dataloader):
+    def inference_dataloader(self,dataloader):
         pred_list=[]
         self.model.eval()
 
@@ -96,7 +103,7 @@ class Model_Instance():
 
     def inference(self,data):
         data = data.to(self.device)
-        pred = self.model(data)
+        pred = self.model(data).cpu().detach()
         return pred
 
     def save(self,path=None,only_model=True,filename='model_checkpoint.pkl'):
@@ -104,11 +111,15 @@ class Model_Instance():
         if only_model:
             torch.save(self.model.state_dict(),save_path)
         else:
+            #save model instance
             pass
 
     def load_model(self,path=None):
         path = path if path else self.save_dir/'model_checkpoint.pkl'
         self.model.load_state_dict(torch.load(path))
+
+    def load_model_instance(self,path=None):
+        pass
 
 
 # def create_model_instance(args):
