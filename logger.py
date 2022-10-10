@@ -1,3 +1,4 @@
+from turtle import width
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -99,8 +100,7 @@ class Logger:
 
         show_category = [c for c in show_category if c in exist_category]
 
-        fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))
-        plt.subplots_adjust(hspace=0.5)
+        fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))#,constrained_layout=True)
         plt.ticklabel_format(style='plain', axis='x', useOffset=False)
 
         axs = np.array(axs).flatten()
@@ -112,14 +112,15 @@ class Logger:
                     _history=Logger.logger_dict[logger_name]
                     _history = _history.groupby('epoch').mean() if unit == 'epoch' else _history
                     _history = _history.reset_index(drop=True)
-                    axs[cidx].plot(range(len(_history)),_history[c],label=logger_name,color=plot_color)
+                    axs[cidx].plot(range(len(_history)),_history[c],label=logger_name,color=plot_color,linewidth=2)
                     axs[cidx].set_title('{}'.format(c), fontsize=20)
                     axs[cidx].legend(loc='upper left',fontsize=15)
                     axs[cidx].tick_params(axis='both', labelsize=15)
-                    axs[cidx].grid(axis='y', linestyle='-', alpha=0.45,color='lightgray')
+                    axs[cidx].grid(axis='y', linestyle='-', alpha=0.7,color='lightgray')
                     axs[cidx].xaxis.set_major_locator(MaxNLocator(integer=True))
                     if c in ylim.keys():
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
+        plt.tight_layout()
         if save:
             plt.savefig(Logger.save_dir/filename)
         if show:
@@ -154,26 +155,27 @@ class Logger:
 # 要先save_epoch 才能 check_best 以及 get_best_record
 
 #example
-# training_logger=Logger('Training')#default 0
-# validation_logger=Logger('Validation')#default 0
-# all_logger=Logger('All')#default 0
-# for i in range(10):
-#    for j in range(10):
-#        training_logger(acc=np.random.rand(),f1score=np.random.rand())
-#        all_logger(acc=np.random.rand(),f1score=np.random.rand(),ff=np.random.rand(),f1=np.random.rand())
-#        validation_logger(acc=np.random.rand())
-#    validation_logger.save_epoch()
-#    training_logger.save_epoch()
-#    all_logger.save_epoch()
-#    validation_logger.check_best(category='acc',mode='max',unit='epoch')
+if __name__ == '__main__':
+    training_logger=Logger('Training')#default 0
+    validation_logger=Logger('Validation')#default 0
+    all_logger=Logger('All')#default 0
+    for i in range(10):
+        for j in range(10):
+            training_logger(acc=np.random.rand(),f1score=np.random.rand())
+            all_logger(acc=np.random.rand(),f1score=np.random.rand(),ff=np.random.rand(),f1=np.random.rand())
+            validation_logger(acc=np.random.rand())
+        validation_logger.save_epoch()
+        training_logger.save_epoch()
+        all_logger.save_epoch()
+        validation_logger.check_best(category='acc',mode='max',unit='epoch')
 
-# #Logger.load_logger('logger_dir/logger_history.pkl')
-# Logger.plot(show_logger=Logger.get_logger_names(),
-#             show_category=['acc','f1score','ff'],
-#             ylim={'acc':[0,1]},
-#             show=False,
-#             save=True)
+    #Logger.load_logger('logger_dir/logger_history.pkl')
+    Logger.plot(show_logger=Logger.get_logger_names(),
+                show_category=['acc','f1score'],
+                ylim={'acc':[0,1]},
+                show=True,
+                save=True)
 
-# Logger.plot(show_category= ['loss','acc'],unit='iter')
-# Logger.plot(['Training','All'])
-# # Logger.export_logger()
+    # Logger.plot(show_category= ['loss','acc'],unit='iter')
+    # Logger.plot(show_logger=['Training','All'])
+    # # Logger.export_logger()
