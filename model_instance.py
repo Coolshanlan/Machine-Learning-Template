@@ -1,6 +1,8 @@
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
+from torch import autocast
+from torch.cuda.amp import GradScaler
 import torch.functional as F
 import numpy as np
 from tqdm.auto import tqdm
@@ -15,7 +17,8 @@ class Model_Instance():
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-                 save_dir ='checkpoint'):
+                 save_dir ='checkpoint',
+                 amp=False):
         self.model = model.to(device)
         self.save_dir = save_dir
         self.optimizer = optimizer
@@ -25,28 +28,44 @@ class Model_Instance():
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
         self.device = device
+        self.amp=amp
+        self.grad_scaler=GradScaler(self.amp)
+
         if not os.path.exists(self.save_dir):
             os.mkdir(self.save_dir)
+
+    def model_update(self,loss):
+        if self.amp:
+            self.grad_scaler.scale(loss).backward()
+            self.grad_scaler.unscale_(self.optimizer)
+            if self.clip_grad:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.clip_grad)
+            self.grad_scaler.step(self.optimizer)
+            self.grad_scaler.update()
+        else:
+            loss.backward()
+            if self.clip_grad:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.clip_grad)
+            self.optimizer.step()
+        self.optimizer.zero_grad()
+
 
     def run_model(self,feature,label,update=True):
 
         feature = feature.to(self.device)
         label = label.to(self.device)
+        amp_enable=self.amp and update
+        with autocast(device_type='cuda' if self.device != 'cpu' else 'cpu', dtype=torch.float16,enabled=amp_enable):
+            if update:
+                    pred = self.model(feature)
+            else:
+                with torch.no_grad():
+                    pred = self.model(feature)
+
+            loss = self.loss_fn(pred,label)
 
         if update:
-            pred = self.model(feature)
-        else:
-            with torch.no_grad():
-                pred = self.model(feature)
-
-        loss = self.loss_fn(pred,label)
-
-        if update:
-            loss.backward()
-            if self.clip_grad:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.clip_grad)
-            self.optimizer.step()
-            self.optimizer.zero_grad()
+            self.model_update(loss)
 
         pred=pred.cpu().detach()
         loss=loss.cpu().detach().item()
@@ -93,7 +112,7 @@ class Model_Instance():
 
         trange = tqdm(dataloader,total=len(dataloader))
         for data in dataloader :
-            data=data.long()
+            data=data.float()
             pred= self.inference(data)
             pred_list.append(pred)
             trange.update()
