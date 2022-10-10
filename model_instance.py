@@ -1,27 +1,23 @@
-from typing_extensions import Self
-from xmlrpc.client import Boolean
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
-import numpy as npf
 import torch.functional as F
-from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-from pathlib import Path
 from tqdm.auto import tqdm
+import os
 class Model_Instance():
     def __init__(self,
-                 model:torch.nn.Module,
-                 optimizer:torch.optim=None,
-                 scheduler:torch.optim.lr_scheduler=None,
-                 loss_function:Callable=None,
-                 evaluation_function:Callable=lambda x,y : {},
-                 scheduler_iter_unit:Boolean = False,
+                 model,
+                 optimizer=None,
+                 scheduler=None,
+                 scheduler_iter_unit=False,
+                 loss_function=None,
+                 evaluation_function=lambda x,y : {},
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
-                 save_dir:str ='checkpoint'):
+                 save_dir ='checkpoint'):
         self.model = model.to(device)
-        self.save_dir = Path(save_dir)
+        self.save_dir = save_dir
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.scheduler_iter_unit=scheduler_iter_unit
@@ -29,10 +25,10 @@ class Model_Instance():
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
         self.device = device
-        if not self.save_dir.exists():
-            self.save_dir.mkdir()
+        if not os.path.exists(self.save_dir):
+            os.mkdir(self.save_dir)
 
-    def run_model(self,feature,label,update=True)-> Tuple[torch.tensor,torch.tensor,Dict]:
+    def run_model(self,feature,label,update=True):
 
         feature = feature.to(self.device)
         label = label.to(self.device)
@@ -56,7 +52,7 @@ class Model_Instance():
         loss=loss.cpu().detach().item()
         label=label.cpu().detach()
 
-        evaluate_dict = self.evaluate_fn(pred,label)
+        evaluate_dict = self.evaluation_fn(pred,label)
 
         return  pred, loss, evaluate_dict
 
@@ -68,19 +64,23 @@ class Model_Instance():
         else:
             self.model.eval()
 
-        trange = tqdm(dataloader,total=len(dataloader))
+        trange = tqdm(dataloader,
+                      total=len(dataloader),
+                      desc=logger.name,
+                      bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}\t{r_bar}')
+
         for data,label in dataloader :
-            data=data.long()# for gpu
-            label=label.long()# for gpu
+            data=data.float()
+            label=label.long()
             pred,loss, eval_dict = self.run_model(data,label,update=update)
             pred_list.append(pred)
             loss_list.append(loss)
 
             logger(loss=loss,**eval_dict)
             avg_log = logger.get_current_epoch_avg()
-            trange.set_postfix(loss=avg_log['loss'],**eval_dict)
+            trange.set_postfix(**avg_log)
             trange.update()
-            if self.scheduler and self.scheduler_iter_unit:
+            if self.scheduler and self.scheduler_iter_unit and update:
                 self.scheduler.step()
 
         logger.save_epoch()
@@ -107,7 +107,7 @@ class Model_Instance():
         return pred
 
     def save(self,path=None,only_model=True,filename='model_checkpoint.pkl'):
-        save_path = self.save_dir/filename
+        save_path = os.path.join(self.save_dir,filename)
         if only_model:
             torch.save(self.model.state_dict(),save_path)
         else:
@@ -115,7 +115,7 @@ class Model_Instance():
             pass
 
     def load_model(self,path=None):
-        path = path if path else self.save_dir/'model_checkpoint.pkl'
+        path = path if path else os.path.join(self.save_dir,'model_checkpoint.pkl')
         self.model.load_state_dict(torch.load(path))
 
     def load_model_instance(self,path=None):
@@ -141,7 +141,7 @@ class Model_Instance():
 #         # evaluation_dict['precision'] = precision
 #         # evaluation_dict['auroc'] = auroc
 #         return evaluation_dict
-#     def loss_function(self,pred,label):
+#     def loss_function(pred,label):
 #         global num_class
 #         def one_hot(x,num_class=num_class):
 #             return torch.eye(num_class)[x,:]

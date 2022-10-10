@@ -1,10 +1,14 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import matplotlib as mpl
 import pickle
 from pathlib import Path
 
-class Logger():
+plt.rcParams["font.family"] = "Serif"
+
+class Logger:
     logger_dict={}
     log_category=set([])
     save_dir=Path('logger_dir')
@@ -64,36 +68,47 @@ class Logger():
         self.current_history=pd.DataFrame(columns=current_category)
         Logger.logger_dict[self.name]=self.history
 
-    @property
+    @staticmethod
     def get_logger_names():
         return list(Logger.logger_dict.keys())
 
-    @property
+    @staticmethod
     def get_loggers():
         return Logger.logger_dict
 
     @staticmethod
-    def plot(logger_list=None,show_category=None,figsize=(6.2,3),ylim={},unit='epoch',save=True,filename='logger_history.png'):
-        if not logger_list:
-            logger_list = Logger.logger_dict.keys()
+    def plot(show_logger=None,show_category=None,figsize=(7.6*1.5,5*1.5),ylim={},unit='epoch',filename='logger_history.png',save=True,show=True):
+        if not show_logger:
+            show_logger = Logger.logger_dict.keys()
 
-        if show_category:
-            show_category = set(show_category) & Logger.log_category
-        else:
+        if not show_category:
             show_category = Logger.log_category
-        figers, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0],figsize[1]))
+
+        exist_category=set([])
+        for logger_name in show_logger:
+            exist_category.update(Logger.logger_dict[logger_name])
+
+        show_category = set(show_category)&exist_category
+
+        fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))
         plt.subplots_adjust(hspace=0.5)
+        plt.ticklabel_format(style='plain', axis='x', useOffset=False)
+        colormap = mpl.cm.Dark2.colors
         axs = np.array(axs).flatten()
 
-        for logger_name in logger_list:
+        for lidx,logger_name in enumerate(show_logger):
+            plot_color = colormap[lidx]
             for cidx,c in enumerate(show_category):
-                if c in Logger.logger_dict[logger_name].columns:
+                if c in Logger.logger_dict[logger_name]:
                     _history=Logger.logger_dict[logger_name]
                     _history = _history.groupby('epoch').mean() if unit == 'epoch' else _history
                     _history = _history.reset_index(drop=True)
-                    axs[cidx].plot(range(len(_history)),_history[c],label=logger_name)
-                    axs[cidx].set_title('{}'.format(c))
-                    axs[cidx].legend(loc='upper left')
+                    axs[cidx].plot(range(len(_history)),_history[c],label=logger_name,color=plot_color)
+                    axs[cidx].set_title('{}'.format(c), fontsize=20)
+                    axs[cidx].legend(loc='upper left',fontsize=15)
+                    axs[cidx].tick_params(axis='both', labelsize=15)
+                    axs[cidx].grid(axis='y', linestyle='-', alpha=0.45,color='lightgray')
+                    axs[cidx].xaxis.set_major_locator(MaxNLocator(integer=True))
                     if c in ylim.keys():
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
         if save:
@@ -132,10 +147,10 @@ class Logger():
 # training_logger=Logger('Training')#default 0
 # validation_logger=Logger('Validation')#default 0
 # all_logger=Logger('All')#default 0
-# for i in range(10):
+# for i in range(100):
 #    for j in range(10):
 #        training_logger(acc=np.random.rand(),f1score=np.random.rand())
-#        all_logger(acc=np.random.rand(),f1score=np.random.rand())
+#        all_logger(acc=np.random.rand(),f1score=np.random.rand(),ff=np.random.rand(),f1=np.random.rand())
 #        validation_logger(acc=np.random.rand())
 #    validation_logger.save_epoch()
 #    training_logger.save_epoch()
@@ -143,7 +158,9 @@ class Logger():
 #    validation_logger.check_best(category='acc',mode='max',unit='epoch')
 
 # #Logger.load_logger('logger_dir/logger_history.pkl')
-# Logger.plot(ylim={'acc':[0,1]})
+# Logger.plot(show_logger=Logger.get_logger_names(),
+#             show_category=['ff','acc'],
+#             ylim={'acc':[0,1]})
 
 # Logger.plot(show_category= ['loss','acc'],unit='iter')
 # Logger.plot(['Training','All'])

@@ -1,14 +1,12 @@
-from email.mime import image
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
 import cv2
 
 class GeneralImageDataset(Dataset):
-    def __init__(self,df,transform=None):
-        self.df =  df
-        self.image_paths = df.image_path.values # to numpy array
-        self.labels=df.label.values # to numpy array
+    def __init__(self,image_paths,labels,transform=None):
+        self.image_paths = image_paths
+        self.labels= labels
         self.transform = transform
 
     def read_image(self,path):
@@ -27,13 +25,12 @@ class GeneralImageDataset(Dataset):
 
 
 class GeneralNumericalDataset(Dataset):
-    def __init__(self,df,transform=None):
-        self.df =  df
-        self.features = df.features.values # to numpy array
-        self.labels=df.label.values # to numpy array
+    def __init__(self,data,labels):
+        self.data = data
+        self.labels=labels
 
     def __getitem__(self,idx):
-        return self.features[idx],self.labels[idx]
+        return self.data[idx],self.labels[idx]
 
     def __len__(self):
         return len(self.labels)
@@ -46,14 +43,19 @@ class GeneralNumericalDataset(Dataset):
 #                          ToTensorV2()#不可刪除
 #                         ])
 
-def get_dataloader(df,
-                    transform=None,
-                    batch_size=32,
-                    shuffle=True,
-                    num_workers=4,
-                    drop_last=True,
-                    pin_memory=True):
-    dataset = GeneralImageDataset(df,transform)
+def get_dataloader(data,
+                   labels,
+                   transform=None,
+                   batch_size=32,
+                   shuffle=True,
+                   num_workers=4,
+                   drop_last=True,
+                   pin_memory=True):
+    def image_transform(image):
+        pass
+    dataset = GeneralImageDataset(image_paths=data,
+                                labels=labels,
+                                transform=image_transform)
     dataloader = DataLoader(dataset,
                             batch_size=batch_size,
                             shuffle=shuffle,
