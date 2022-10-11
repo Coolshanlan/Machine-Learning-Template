@@ -28,7 +28,7 @@ def init_weights(net, init_type='normal', gain=0.02):
             init.normal_(m.weight.data, 1.0, gain)
             init.constant_(m.bias.data, 0.0)
 
-    print('initialize network with %s' % init_type)
+    #print('initialize network with %s' % init_type)
     net.apply(init_func)
 
 def setSeed(seed=31,tor=True,tensorf=False):

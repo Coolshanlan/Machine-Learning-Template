@@ -125,6 +125,7 @@ class Logger:
             plt.savefig(Logger.save_dir/filename)
         if show:
             plt.show()
+        plt.close()
 
     def export_logger(filename='logger_history.pkl'):
         path = Logger.save_dir/filename
