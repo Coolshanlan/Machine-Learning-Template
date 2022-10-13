@@ -51,3 +51,17 @@ def setSeed(seed=31,tor=True,tensorf=False):
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         torch.backends.cudnn.deterministic = True
+
+def move_to(obj,**kwargs):
+    if torch.is_tensor(obj):
+        return obj.to(**kwargs)
+    elif isinstance(obj, dict):
+        res = {}
+        for k, v in obj.items():
+            res[k] = move_to(v, **kwargs)
+        return res
+    elif isinstance(obj, list):
+        res = []
+        for v in obj:
+            res.append(move_to(v, **kwargs))
+        return res

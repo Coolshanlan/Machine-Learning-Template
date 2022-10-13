@@ -7,6 +7,10 @@ import torch.functional as F
 import numpy as np
 from tqdm.auto import tqdm
 import os
+import pandas as pd
+from utils import move_to
+
+
 class Model_Instance():
     def __init__(self,
                  model,
@@ -18,7 +22,8 @@ class Model_Instance():
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
                  save_dir ='checkpoint',
-                 amp=False):
+                 amp=False,
+                 accum_iter=1):
         self.model = model.to(device)
         self.save_dir = save_dir
         self.optimizer = optimizer
@@ -29,90 +34,91 @@ class Model_Instance():
         self.evaluation_fn=evaluation_function
         self.device = device
         self.amp=amp
+        self.accum_iter=accum_iter
+        self.run_iter=1
         self.grad_scaler=GradScaler(self.amp)
-
         if not os.path.exists(self.save_dir):
             os.mkdir(self.save_dir)
 
     def model_update(self,loss):
-        if self.amp:
-            self.grad_scaler.scale(loss).backward()
-            self.grad_scaler.unscale_(self.optimizer)
-            if self.clip_grad:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.clip_grad)
-            self.grad_scaler.step(self.optimizer)
-            self.grad_scaler.update()
+        if self.amp and self.device != torch.device('cpu'):
+            self.grad_scaler.scale(loss/self.accum_iter).backward()
+            if self.run_iter % self.accum_iter == 0:
+                if self.clip_grad:
+                    self.grad_scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_value_(self.model.parameters(), clip_value=self.clip_grad)
+                self.grad_scaler.step(self.optimizer)
+                self.grad_scaler.update()
+                self.optimizer.zero_grad(set_to_none=True)
         else:
-            loss.backward()
-            if self.clip_grad:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.clip_grad)
-            self.optimizer.step()
-        self.optimizer.zero_grad()
+            (loss/self.accum_iter).backward()
+            if iter % self.accum_iter == 0:
+                if self.clip_grad:
+                    torch.nn.utils.clip_grad_value_(self.model.parameters(), clip_value=self.clip_grad)
+                self.optimizer.step()
+                self.optimizer.zero_grad(set_to_none=True)
 
+    def _run(self,data):
+        data = move_to(data,self.device,non_blocking=True).float()
+        return self.model(data)
 
-    def run_model(self,feature,label,update=True):
+    def _run_model(self,data,label):
+        pred = self._run(data)
+        label = label.to(self.device,non_blocking=True).long()
+        return pred, self.loss_fn(pred,label)
 
-        feature = feature.to(self.device)
-        label = label.to(self.device)
+    def run_model(self,data,label,update=True):
+        self.model.train(update)
         amp_enable=self.amp and update
         with autocast(device_type='cuda' if self.device != 'cpu' else 'cpu', dtype=torch.float16,enabled=amp_enable):
             if update:
-                    pred = self.model(feature)
+                    pred, loss = self._run_model(data,label)
+                    self.model_update(loss)
             else:
                 with torch.no_grad():
-                    pred = self.model(feature)
+                    pred, loss = self._run_model(data,label)
 
-            loss = self.loss_fn(pred,label)
+        pred=pred.detach().to(torch.device('cpu'))
+        loss=loss.detach().to(torch.device('cpu')).item()
+        label=label.detach().to(torch.device('cpu'))
 
-        if update:
-            self.model_update(loss)
+        return  pred, loss
 
-        pred=pred.cpu().detach()
-        loss=loss.cpu().detach().item()
-        label=label.cpu().detach()
-
-        evaluate_dict = self.evaluation_fn(pred,label)
-
-        return  pred, loss, evaluate_dict
 
     def run_dataloader(self,dataloader,logger=None,update=True):
-        pred_list=[]
-        loss_list=[]
-        if update:
-            self.model.train()
-        else:
-            self.model.eval()
-
-        trange = tqdm(dataloader,
-                      total=len(dataloader),
-                      desc=logger.name,
-                      bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}\t{r_bar}')
-
-        for data,label in dataloader :
-            data=data.float()
-            label=label.long()
-            pred,loss, eval_dict = self.run_model(data,label,update=update)
+        id_list,pred_list,loss_list=[]*3
+        self.run_iter=0
+        trange = tqdm(dataloader,total=len(dataloader),desc=logger.name,bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}\t{r_bar}')
+        for _iter,(ids,data,label) in enumerate(dataloader) :
+            self.run_iter=_iter+1
+            pred,loss = self.run_model(data,label,update=update)
             pred_list.append(pred)
             loss_list.append(loss)
-
-            logger(loss=loss,**eval_dict)
-            avg_log = logger.get_current_epoch_avg()
-            trange.set_postfix(**avg_log)
+            id_list.append(ids)
+            trange.set_postfix(np.mean(loss_list))
             trange.update()
             if self.scheduler and self.scheduler_iter_unit and update:
                 self.scheduler.step()
-
-        logger.save_epoch()
         pred_list = np.concatenate(pred_list,axis=0)
-        return pred_list,loss_list
+        label_list = np.concatenate(label_list,axis=0)
+        id_list = np.concatenate(id_list,axis=0)
+        evaluate_dict = self.evaluation_fn(pred,label)
+        logger(loss=np.mean(loss_list),**evaluate_dict)
+        trange.set_postfix(loss=np.mean(loss_list),**evaluate_dict)
+        dataloader_record=pd.DataFrame({'id':id_list,
+                                        'pred':pred_list,
+                                        'loss':loss_list})
+        return dataloader_record,evaluate_dict
+
+    @torch.no_grad
+    def inference(self,data):
+        self.model.train(False)
+        return self._run(data).to(torch.device('cpu'))
 
     def inference_dataloader(self,dataloader):
         pred_list=[]
-        self.model.eval()
-
         trange = tqdm(dataloader,total=len(dataloader))
         for data in dataloader :
-            data=data.float()
             pred= self.inference(data)
             pred_list.append(pred)
             trange.update()
@@ -120,12 +126,7 @@ class Model_Instance():
         pred_list = np.concatenate(pred_list,axis=0)
         return pred_list
 
-    def inference(self,data):
-        data = data.to(self.device)
-        pred = self.model(data).cpu().detach()
-        return pred
-
-    def save(self,path=None,only_model=True,filename='model_checkpoint.pkl'):
+    def save(self,only_model=True,filename='model_checkpoint.pkl'):
         save_path = os.path.join(self.save_dir,filename)
         if only_model:
             torch.save(self.model.state_dict(),save_path)

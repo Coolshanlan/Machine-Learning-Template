@@ -15,34 +15,58 @@ class Logger:
 
     def __init__(self,name):
         self.name=name
-        self.record=pd.DataFrame()
+        self.history=pd.DataFrame()
+        self.current_history=pd.DataFrame()
         Logger.logger_dict[self.name] = pd.DataFrame()
         self.epoch=0
         if not os.path.exists(Logger.save_dir):
             os.mkdir(Logger.save_dir)
 
 
-    def update_category(self,new_row):
-        Logger.log_category.update(set(new_row.columns.to_list()))
+    def update_category(self):
+        Logger.log_category.update(set(self.current_history.columns.to_list()))
 
     def __call__(self,**kwargs):
-        self.epoch+=1
         new_row = pd.DataFrame(kwargs,index=[0])
-        self.update_category(new_row)
-        new_row['epoch']=self.epoch
-        self.record=pd.concat([self.record,new_row])
-        Logger.logger_dict[self.name]=self.record
+        self.current_history=pd.concat([self.current_history,new_row])
 
-    def get_last_record(self):
-        return self.record.iloc[-1]
+    def __str__(self,r=3):
+        output_str=''
+        if len(self.current_history)>0:
+            avg_epoch = self.get_current_epoch_avg()
+            for log_c in avg_epoch.index:
+                output_str+= 'avg{}:{} \t'.format(log_c,f'%.{r}f'%avg_epoch[log_c])
+            return output_str
+        else:
+            avg_epoch = self.history[self.history.epoch == self.epoch-1].iloc[-1]
+            for log_c in avg_epoch.index:
+                output_str+= 'avg{}:{} \t'.format(log_c,f'%.{r}f'%avg_epoch[log_c])
+            return output_str
 
-    def get_best_record(self,category='loss',mode='min'):
-        best_index = self.record[category].idxmin() if mode == 'min' else self.record[category].idxmax()
-        return best_index, self.record.iloc[best_index]
+    def get_current_epoch_avg(self):
+        return self.current_history.mean()
 
-    def check_best(self,category='loss',mode='min'):
-        best_index,best_record = self.get_best_record(category,mode)
-        return (len(self.record)-1)==best_index
+    def get_last_epoch_avg(self):
+        return self.history[self.history.epoch == (self.epoch-1)].mean()
+
+    def get_best_record(self,category='loss',mode='min',unit='epoch'):
+        _history = self.history.groupby('epoch').mean() if unit == 'epoch' else self.history
+        best_index = _history[category].idxmin() if mode == 'min' else _history[category].idxmax()
+        return best_index, _history.iloc[best_index]
+
+    def check_best(self,category='loss',mode='min',unit='epoch'):
+        _history = self.history.groupby('epoch').mean() if unit == 'epoch' else self.history
+        best_index,best_record = self.get_best_record(category,mode,unit)
+        return (len(_history[category])-1)==best_index
+
+    def save_epoch(self):
+        self.update_category()
+        current_category=self.current_history.columns
+        self.current_history['epoch'] = self.epoch
+        self.epoch += 1
+        self.history =pd.concat([self.history,self.current_history.copy()]) #self.history.append(self.current_history.copy()).reset_index(drop=True)
+        self.current_history=pd.DataFrame(columns=current_category)
+        Logger.logger_dict[self.name]=self.history
 
     @staticmethod
     def get_logger_names():
@@ -58,6 +82,7 @@ class Logger:
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set2.colors,
              ylim={},
+             unit='epoch',
              filename='logger_history.png',
              save=True,
              show=True):
@@ -84,6 +109,7 @@ class Logger:
             for cidx,c in enumerate(show_category):
                 if c in Logger.logger_dict[logger_name]:
                     _history=Logger.logger_dict[logger_name]
+                    _history = _history.groupby('epoch').mean() if unit == 'epoch' else _history
                     _history = _history.reset_index(drop=True)
                     axs[cidx].plot(range(len(_history)),_history[c],label=logger_name,color=plot_color,linewidth=2)
                     axs[cidx].set_title('{}'.format(c), fontsize=20)
@@ -95,13 +121,13 @@ class Logger:
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
         plt.tight_layout()
         if save:
-            plt.savefig(os.path.join(Logger.save_dir,filename))
+            plt.savefig(Logger.save_dir/filename)
         if show:
             plt.show()
         plt.close()
 
     def export_logger(filename='logger_history.pkl'):
-        path = os.path.join(Logger.save_dir,filename)
+        path = Logger.save_dir/filename
         with open(path,'wb') as f:
             pickle.dump({'loggers':Logger.logger_dict,
                          'category':Logger.log_category}, f)
@@ -134,10 +160,14 @@ if __name__ == '__main__':
     validation_logger=Logger('Validation')#default 0
     all_logger=Logger('All')#default 0
     for i in range(10):
-        training_logger(acc=np.random.rand(),f1score=np.random.rand())
-        all_logger(acc=np.random.rand(),f1score=np.random.rand(),ff=np.random.rand(),f1=np.random.rand())
-        validation_logger(acc=np.random.rand())
-        validation_logger.check_best(category='acc',mode='max')
+        for j in range(10):
+            training_logger(acc=np.random.rand(),f1score=np.random.rand())
+            all_logger(acc=np.random.rand(),f1score=np.random.rand(),ff=np.random.rand(),f1=np.random.rand())
+            validation_logger(acc=np.random.rand())
+        validation_logger.save_epoch()
+        training_logger.save_epoch()
+        all_logger.save_epoch()
+        validation_logger.check_best(category='acc',mode='max',unit='epoch')
 
     #Logger.load_logger('logger_dir/logger_history.pkl')
     Logger.plot(show_logger=Logger.get_logger_names(),
