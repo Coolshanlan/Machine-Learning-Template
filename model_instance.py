@@ -110,7 +110,7 @@ class Model_Instance():
                                         'loss':loss_list})
         return dataloader_record,evaluate_dict
 
-    @torch.no_grad
+    @torch.no_grad()
     def inference(self,data):
         self.model.train(False)
         return self._run(data).to(torch.device('cpu'))
