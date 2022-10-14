@@ -26,12 +26,12 @@ class Logger:
         Logger.log_category.update(set(new_row.columns.to_list()))
 
     def __call__(self,**kwargs):
-        self.epoch+=1
-        new_row = pd.DataFrame(kwargs,index=[0])
+        new_row = pd.DataFrame(kwargs,index=[self.epoch],dtype=np.float)
         self.update_category(new_row)
         new_row['epoch']=self.epoch
         self.record=pd.concat([self.record,new_row])
         Logger.logger_dict[self.name]=self.record
+        self.epoch+=1
 
     def get_last_record(self):
         return self.record.iloc[-1]

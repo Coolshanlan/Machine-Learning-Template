@@ -3,7 +3,7 @@ from  torch.utils.data import Dataset,DataLoader
 import torch
 import cv2
 
-class GeneralImageDataset(Dataset):
+class ImageDataset(Dataset):
     def __init__(self,image_paths,labels,transform=None):
         self.image_paths = image_paths
         self.labels= labels
@@ -13,7 +13,7 @@ class GeneralImageDataset(Dataset):
         image=cv2.imread(path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform :
-            image = self.transform(image=image)['image']
+            image = self.transform(image)
         return image
 
     def __getitem__(self,idx):
@@ -23,8 +23,27 @@ class GeneralImageDataset(Dataset):
     def __len__(self):
         return len(self.image_paths)
 
+class SemanticImageDataset(Dataset):
+    def __init__(self,image_paths,label_paths,transform=None):
+        self.image_paths = image_paths
+        self.label_paths= label_paths
+        self.transform = transform
 
-class GeneralNumericalDataset(Dataset):
+    def read_image(self,path):
+        image=cv2.imread(path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return image
+
+    def __getitem__(self,idx):
+        data = self.read_image(self.image_paths[idx])
+        label = self.read_image(self.label_paths[idx])
+        data,label = self.transform(data,label)
+        return data,label
+
+    def __len__(self):
+        return len(self.image_paths)
+
+class NormalDataset(Dataset):
     def __init__(self,data,labels):
         self.data = data
         self.labels=labels
@@ -43,23 +62,23 @@ class GeneralNumericalDataset(Dataset):
 #                          ToTensorV2()#不可刪除
 #                         ])
 
-def get_dataloader(data,
-                   labels,
-                   transform=None,
-                   batch_size=32,
-                   shuffle=True,
-                   num_workers=4,
-                   drop_last=True,
-                   pin_memory=True):
-    def image_transform(image):
-        pass
-    dataset = GeneralImageDataset(image_paths=data,
-                                labels=labels,
-                                transform=image_transform)
-    dataloader = DataLoader(dataset,
-                            batch_size=batch_size,
-                            shuffle=shuffle,
-                            num_workers=num_workers,
-                            drop_last=drop_last,
-                            pin_memory=pin_memory)
-    return dataset,dataloader
+# def get_dataloader(data,
+#                    labels,
+#                    transform=None,
+#                    batch_size=32,
+#                    shuffle=True,
+#                    num_workers=4,
+#                    drop_last=True,
+#                    pin_memory=True):
+#     def image_transform(image):
+#         pass
+#     dataset = ImageDataset(image_paths=data,
+#                            labels=labels,
+#                            transform=image_transform)
+#     dataloader = DataLoader(dataset,
+#                             batch_size=batch_size,
+#                             shuffle=shuffle,
+#                             num_workers=num_workers,
+#                             drop_last=drop_last,
+#                             pin_memory=pin_memory)
+#     return dataset,dataloader

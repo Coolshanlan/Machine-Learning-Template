@@ -23,22 +23,22 @@ from imblearn.under_sampling import EditedNearestNeighbours
 import pandas as pd
 import numpy as np
 import cv2
+from time import sleep
+from glob import glob
+import os,sys
+import warnings
+warnings.filterwarnings("ignore")
 
-# 畫圖
+# figure
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# 進度條
+# progress
 from tqdm.notebook import tqdm
 
-from time import sleep
-import warnings
-
-from glob import glob
-import os,sys
-
-#sys.path.append('../input/coolshan-coding-utils')
-#from confusion_matrix_pretty_print import pp_matrix_from_data
-#from logger import Logger
-#from model_instance import ModelInstance
-warnings.filterwarnings("ignore")
+# sys.path.append('../input/coolshan-coding-utils')
+from confusion_matrix_pretty_print import pp_matrix_from_data
+from logger import Logger
+from model_instance import ModelInstance
+from loss_family import bi_tempered_binary_logistic_loss
+from utils import setSeed, move_to,init_weights

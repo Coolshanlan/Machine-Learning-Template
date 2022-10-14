@@ -1,3 +1,4 @@
+from shutil import move
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
@@ -69,19 +70,19 @@ class Model_Instance():
                 self.optimizer.zero_grad(set_to_none=True)
         else:
             (loss/self.accum_iter).backward()
-            if iter % self.accum_iter == 0:
+            if self.run_iter % self.accum_iter == 0:
                 if self.clip_grad:
                     torch.nn.utils.clip_grad_value_(self.model.parameters(), clip_value=self.clip_grad)
                 self.optimizer.step()
                 self.optimizer.zero_grad(set_to_none=True)
 
     def _run(self,data):
-        data = move_to(data,device=self.device,non_blocking=True).float()
+        data = move_to(data,device=self.device,non_blocking=True,dtype=torch.float)
         return self.model(data)
 
     def _run_model(self,data,label):
         pred = self._run(data)
-        label = label.to(self.device,non_blocking=True).long()
+        label = move_to(self.device,non_blocking=True,dtype=torch.long)
         return pred, self.loss_fn(pred,label)
 
     def run_model(self,data,label,update=True):
