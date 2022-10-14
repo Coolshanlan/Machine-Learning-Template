@@ -113,7 +113,7 @@ you can use `Logger.plot()` to see metrics record after running `run_dataloader`
 
 It also will display in terminal after each epoch.
 ```console
-eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, A_loss_Name=3.83, B_loss_Name=3.69, acc=0.214, loss=7.52]
+eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
 ```
 
 ### run_model
