@@ -8,7 +8,21 @@ import numpy as np
 from tqdm.auto import tqdm
 import os
 import pandas as pd
-from utils import move_to
+
+def move_to(obj,**kwargs):
+    if torch.is_tensor(obj):
+        return obj.to(**kwargs)
+    elif isinstance(obj, dict):
+        res = {}
+        for k, v in obj.items():
+            res[k] = move_to(v, **kwargs)
+        return res
+    elif isinstance(obj, list):
+        res = []
+        for v in obj:
+            res.append(move_to(v, **kwargs))
+        return res
+
 class Recorder(dict):
     def __call__(self,**kwargs):
         for k,v in kwargs.items():
@@ -39,7 +53,7 @@ class Model_Instance():
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter=False,
+                 scheduler_iter_unit=False,
                  loss_function=None,
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
@@ -51,7 +65,7 @@ class Model_Instance():
         self.save_dir = save_dir
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.scheduler_iter=scheduler_iter
+        self.scheduler_iter_unit=scheduler_iter_unit
         self.loss_criterial = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
@@ -127,14 +141,14 @@ class Model_Instance():
     def run_dataloader(self,dataloader,logger=None,update=True):
         recorder = Recorder()
         self.run_iter=0
-        trange = tqdm(dataloader,total=len(dataloader),desc=logger.name,bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}{r_bar}')
+        trange = tqdm(dataloader,total=len(dataloader),desc=logger.name if logger else '',bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}{r_bar}')
 
         for _iter,(data,label) in enumerate(dataloader) :
             self.run_iter=_iter+1
 
             pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-            if self.scheduler and self.scheduler_iter and update:
+            if self.scheduler and self.scheduler_iter_unit and update:
                 self.scheduler.step()
 
             recorder(pred=pred,**loss_dict)
@@ -143,7 +157,8 @@ class Model_Instance():
 
         evaluate_dict = self.evaluation_fn(pred,label)
         avg_loss_dict=recorder.get_avg(loss_dict.keys())
-        logger(**avg_loss_dict,**evaluate_dict)
+        if logger:
+            logger(**avg_loss_dict,**evaluate_dict)
         trange.set_postfix(**avg_loss_dict,**evaluate_dict)
         return recorder.get_dict(concat=['pred']),evaluate_dict
 
@@ -175,37 +190,3 @@ class Model_Instance():
 
     def load_model_instance(self,path=None):
         pass
-
-
-# def one_hot(x,num_class=num_class):
-#         return torch.eye(num_class)[x,:]
-# def evaluation_function(predict,label):
-#     evaluation_dict={}
-#     predict_category = predict.argmax(axis=1)
-
-#     #ont_hot_label = one_hot(label)
-#     #precision, recall, f1,_ = precision_recall_fscore_support(label,predict_category,average='macro')
-#     #auroc = roc_auc_score(label,predict,average='macro')
-#     acc= accuracy_score(label,predict_category)
-#     evaluation_dict['acc'] =acc
-#     # evaluation_dict['f1_score'] = f1
-#     # evaluation_dict['recall'] = recall
-#     # evaluation_dict['precision'] = precision
-#     # evaluation_dict['auroc'] = auroc
-#     return evaluation_dict
-
-# def loss_function(pred,label):
-#     one_hot_label=one_hot(label)
-#     return nn.CrossEntropyLoss()(pred,label) + bi_tempered_logistic_loss(pred,one_hot_label.to('cuda'),t1=0.5,t2=2.0)
-
-
-# model = torch.nn.Module
-# loss_fn   = nn.CrossEntropyLoss()
-# optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr,amsgrad=False)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,mode='max', factor=0.5, patience=3, threshold=0.0001, threshold_mode='rel', cooldown=0, min_lr=1e-7, eps=1e-08, verbose=True)
-# model_instance= Model_Instance(model=model,
-#                         optimizer=optimizer,
-#                         loss_function=loss_fn,
-#                         evaluation_function=evaluation_function,
-#                         scheduler=scheduler,
-#                         save_model_path=args.ckpt_dir/'best_model.pkl')
