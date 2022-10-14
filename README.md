@@ -36,6 +36,15 @@ for epoch in range(cfg.epoch):
   if valid_logger.check_best('loss',mode='min):
     model_instance.save(only_model=True,filename='best_model.pkl')
 
+# Inference - Case1 dataloader
+test_dataloader=get_dataloader()
+preds = model_instance.inference_dataloader(test_dataloader)
+
+# Inference -Case2 Only Data
+preds = model.instance(data)
+
+
+
 # Visualize training history
 Logger.plot()
 ```
@@ -57,7 +66,7 @@ class Model_Instance():
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
                  save_dir ='checkpoint',
                  amp=False,
-                 accum_iter=1)
+                 accum_iter=1):
 
 def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
@@ -104,7 +113,7 @@ def load_model(self,only_model=True,path=None):
 ```python
 def evaluation_fn(pred,label):
   acc = get_acc(pred,label)
-  fi = get_f1(pred,label)
+  f1 = get_f1(pred,label)
   return {'accuracy':acc,'f1 score':f1}
 # if you don't have evaluation metrics,
 # you can ignore evaluation_fn parameter in Model Instance
@@ -115,14 +124,6 @@ It also will display in terminal after each epoch.
 ```console
 eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
 ```
-
-### run_model
-```python
-def run_model(self,data,label,update=True)
-return pred, (loss,loss_dict)
-```
-- loss is your total loss that define in loss_fn
-
 ## Logger
 ### Plot
 ```python
