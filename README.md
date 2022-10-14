@@ -30,10 +30,11 @@ valid_logger = Logger('valid')
 # Start training
 for epoch in range(cfg.epoch):
   record,evaluation = model_instance.run_dataloader(train_dataloader,logger=training_logger,update=True)
-  record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=True)
+  record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
   if valid_logger.check_best('loss',mode='min):
     model_instance.save(only_model=True,filename='best_model.pkl')
 
 # Visualize training history
 Logger.plot()
 ```
+![](https://github.com/Coolshanlan/Efficient-Pytorch-Template/blob/main/image/logger_example1.png)
