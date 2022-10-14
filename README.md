@@ -2,7 +2,7 @@
  This is a efficient pytorch template that support logger, dataset and all utils that you need during training and inference.
 
 # Using Example
-```=python
+``` python
 from logger import Logger
 from model_instance import Model_Instance
 from dataset import NormalDataset
