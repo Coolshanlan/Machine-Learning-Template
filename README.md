@@ -83,7 +83,6 @@ def load_model(self,only_model=True,path=None):
 - **amp** `amp=True`, Enable Automatic Mixed Precision
 - **accum_iter** `accum_iter=N` if (N>1), Enable Gradient Accumulation else N=1
 
--
 ### Loss Function Define
   ```python
   #case 1
@@ -113,6 +112,9 @@ def evaluation_fn(pred,label):
 you can use `Logger.plot()` to see metrics record after running `run_dataloader`
 
 It also will display in terminal after each epoch.
+```console
+eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, A_loss_Name=3.83, B_loss_Name=3.69, acc=0.214, loss=7.52]
+```
 
 ### run_model
 ```python
