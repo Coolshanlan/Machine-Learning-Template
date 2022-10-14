@@ -21,7 +21,9 @@ def evaluation_fn(pred,label):
 # Create model instance
 model = get_model()
 optimizer = torch.optim.AdamW(model.parameters(),lr=cfg.lr)
-model_instance = Model_Instance(model=model,optimizer=optimizer,loss_fn=loss_fn,evaluation_fn=evaluation_fn)
+model_instance = Model_Instance(model=model,
+                                optimizer=optimizer,
+                                loss_fn=loss_fn,evaluation_fn=evaluation_fn)
 
 # Create Logger
 training_logger = Logger('train')
@@ -57,28 +59,82 @@ class Model_Instance():
                  amp=False,
                  accum_iter=1)
 
-def run_model(self,data,label,update=True)
+def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
 
-def run_dataloader(self,dataloader,logger=None,update=True)
+def run_dataloader(self,dataloader,logger=None,update=True):
   return record_dict, evaluation_dict
 
 @torch.no_grad()
-def inference(self,data)
+def inference(self,data):
   return model_outputs
 
 def inference_dataloader(self,dataloader):
   return model_outputs
 
-def save(self,only_model=True,filename='model_checkpoint.pkl')
+def save(self,only_model=True,filename='model_checkpoint.pkl'):
 
-def load_model(self,only_model=True,path=None)
+def load_model(self,only_model=True,path=None):
 ```
-- **scheduler_iter**
-  if your learning scheduler is be updated during per iter then `scheduler_iter=True`
+- **scheduler_iter** `scheduler_iter=True`, if your learning scheduler update during per iter then
+- **clip_grad** Clips gradient of an iterable of parameters at specified value.
+- **device** torch.device()
+- **save_dir** the dir to store model checkpoint
+- **amp** `amp=True`, Enable Automatic Mixed Precision
+- **accum_iter** `accum_iter=N` if (N>1), Enable Gradient Accumulation else N=1
+
+-
+### Loss Function Define
+  ```python
+  #case 1
+  def loss_fn(pred,label):
+    return your_loss
+  #case 2
+  def loss_fn(pred,label):
+    loss_A=...
+    loss_B=...
+    total_loss = loss_A+loss_B
+    return total_loss,{'A_loss_Name':loss_A,'B_loss_Name':loss_B}
+  ```
+  Each different loss details will display in progress like
+  ```console
+  train  54%|██████████▊         | 63/117 [00:01<00:01, 46.42it/s, A_loss_Name=5, B_loss_Name=4.2, loss=9.2]
+  ```
+
+## Evaluation function Define
+```python
+def evaluation_fn(pred,label):
+  acc = get_acc(pred,label)
+  fi = get_f1(pred,label)
+  return {'accuracy':acc,'f1 score':f1}
+# if you don't have evaluation metrics,
+# you can ignore evaluation_fn parameter in Model Instance
+```
+you can use `Logger.plot()` to see metrics record after running `run_dataloader`
+
+It also will display in terminal after each epoch.
+
 ### run_model
 ```python
 def run_model(self,data,label,update=True)
 return pred, (loss,loss_dict)
 ```
 - loss is your total loss that define in loss_fn
+
+## Logger
+### Plot
+```python
+@staticmethod
+def plot(show_logger=None,
+         show_category=None,
+         figsize=(7.6*1.5,5*1.5),
+         cmp=mpl.cm.Set2.colors,
+         ylim={},
+         filename='logger_history.png',
+         save=True,
+         show=True):
+```
+- **show_logger** `show_logger=[logger1_name,logger2_name...]` witch **logger** you want to show
+- **show_category** `show_logger=['acc','f1' ...]` witch **evaluation metrics** you want to show, it is depend on tou `evaluation_function`
+- **save** save figure or not
+- **show** plt.show() or not
