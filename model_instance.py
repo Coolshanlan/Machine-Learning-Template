@@ -1,4 +1,3 @@
-from shutil import move
 import torch.nn as nn
 from  torch.utils.data import Dataset,DataLoader
 import torch
@@ -10,7 +9,6 @@ from tqdm.auto import tqdm
 import os
 import pandas as pd
 from utils import move_to
-
 class Recorder(dict):
     def __call__(self,**kwargs):
         for k,v in kwargs.items():
@@ -19,6 +17,7 @@ class Recorder(dict):
             else:
                 self[k]=[]
                 self[k].append(v)
+
     def get_dict(self,concat=[]):
         return_dict={}
         for k in self.keys():
@@ -28,13 +27,19 @@ class Recorder(dict):
                 return_dict[k] = self[k]
         return return_dict
 
+    def get_avg(self,keys):
+        return_dict={}
+        for k in keys:
+            return_dict[k]=np.mean(self[k])
+        return return_dict
+
 
 class Model_Instance():
     def __init__(self,
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter_unit=False,
+                 scheduler_iter=False,
                  loss_function=None,
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
@@ -46,8 +51,8 @@ class Model_Instance():
         self.save_dir = save_dir
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.scheduler_iter_unit=scheduler_iter_unit
-        self.loss_fn = loss_function
+        self.scheduler_iter=scheduler_iter
+        self.loss_criterial = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
         self.device = device
@@ -57,8 +62,21 @@ class Model_Instance():
         self.grad_scaler=GradScaler(self.amp)
         if not os.path.exists(self.save_dir):
             os.mkdir(self.save_dir)
+    def loss_fn(self,pred,label):
+        loss_return = self.loss_criterial(pred,label)
+        if not isinstance(loss_return,tuple):
+            loss_return = (loss_return,{'loss':loss_return.detach().to(torch.device('cpu'))})
+        else:
+            loss,loss_dict=loss_return
+            if 'loss' not in loss_dict.keys():
+                loss_dict['loss'] = loss
+            loss_dict = {k:loss_dict[k].detach().to(torch.device('cpu')) for k in loss_dict.keys()}
+            loss_return=(loss,loss_dict)
+        return loss_return
 
     def model_update(self,loss):
+        if type(loss)==tuple:
+            loss = loss[0]
         if self.amp and self.device != torch.device('cpu'):
             self.grad_scaler.scale(loss/self.accum_iter).backward()
             if self.run_iter % self.accum_iter == 0:
@@ -82,25 +100,28 @@ class Model_Instance():
 
     def _run_model(self,data,label):
         pred = self._run(data)
-        label = move_to(self.device,non_blocking=True,dtype=torch.long)
-        return pred, self.loss_fn(pred,label)
+
+        label= move_to(label,device=self.device,non_blocking=True,dtype=torch.long)
+
+        loss_return=self.loss_fn(pred,label)
+        return pred, loss_return
 
     def run_model(self,data,label,update=True):
         self.model.train(update)
         amp_enable=self.amp and update
         with autocast(device_type='cuda' if self.device != 'cpu' else 'cpu', dtype=torch.float16,enabled=amp_enable):
             if update:
-                    pred, loss = self._run_model(data,label)
+                    pred, (loss,loss_dict) = self._run_model(data,label)
                     self.model_update(loss)
             else:
                 with torch.no_grad():
-                    pred, loss = self._run_model(data,label)
+                    pred, (loss,loss_dict) = self._run_model(data,label)
 
         pred=pred.detach().to(torch.device('cpu'))
         loss=loss.detach().to(torch.device('cpu')).item()
         label=label.detach().to(torch.device('cpu'))
 
-        return  pred, loss
+        return  pred, (loss,loss_dict)
 
 
     def run_dataloader(self,dataloader,logger=None,update=True):
@@ -111,19 +132,19 @@ class Model_Instance():
         for _iter,(data,label) in enumerate(dataloader) :
             self.run_iter=_iter+1
 
-            pred,loss = self.run_model(data,label,update=update)
+            pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-            if self.scheduler and self.scheduler_iter_unit and update:
+            if self.scheduler and self.scheduler_iter and update:
                 self.scheduler.step()
 
-            recorder(pred=pred,loss=loss)
-            trange.set_postfix(loss=np.mean(recorder['loss']))
+            recorder(pred=pred,**loss_dict)
+            trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
             trange.update()
 
         evaluate_dict = self.evaluation_fn(pred,label)
-        avg_loss=np.mean(recorder['loss'])
-        logger(loss=avg_loss,**evaluate_dict)
-        trange.set_postfix(loss=avg_loss,**evaluate_dict)
+        avg_loss_dict=recorder.get_avg(loss_dict.keys())
+        logger(**avg_loss_dict,**evaluate_dict)
+        trange.set_postfix(**avg_loss_dict,**evaluate_dict)
         return recorder.get_dict(concat=['pred']),evaluate_dict
 
     @torch.no_grad()
