@@ -39,6 +39,6 @@ from tqdm.notebook import tqdm
 # sys.path.append('../input/coolshan-coding-utils')
 from confusion_matrix_pretty_print import pp_matrix_from_data
 from logger import Logger
-from model_instance import ModelInstance
+from model_instance import Model_Instance
 from loss_family import bi_tempered_binary_logistic_loss
 from utils import setSeed, move_to,init_weights
