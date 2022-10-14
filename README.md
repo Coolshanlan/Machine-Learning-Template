@@ -1,4 +1,4 @@
-# Efficient-Pytorch-Template
+# Efficient Pytorch Template
  This is a efficient pytorch template support logger, dataset and all utils that you need during training and inference.
 
 # Example Code
