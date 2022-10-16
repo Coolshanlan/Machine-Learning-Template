@@ -157,10 +157,11 @@ class Model_Instance():
 
         evaluate_dict = self.evaluation_fn(pred,label)
         avg_loss_dict=recorder.get_avg(loss_dict.keys())
+        record_dict={**evaluate_dict,**avg_loss_dict}
         if logger:
-            logger(**avg_loss_dict,**evaluate_dict)
-        trange.set_postfix(**avg_loss_dict,**evaluate_dict)
-        return recorder.get_dict(concat=['pred']),evaluate_dict
+            logger(**record_dict)
+        trange.set_postfix(**record_dict)
+        return recorder.get_dict(concat=['pred']),record_dict
 
     @torch.no_grad()
     def inference(self,data):
