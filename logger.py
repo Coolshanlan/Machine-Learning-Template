@@ -1,3 +1,4 @@
+from typing import List
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,7 +8,6 @@ import pickle
 import os
 
 plt.rcParams["font.family"] = "Serif"
-#仿照wandb 可以做實驗
 class Config(dict):
     def __setattr__(self, attr,val):
         self[attr]=val
@@ -73,14 +73,14 @@ class Logger:
         if not show_logger:
             show_logger = Logger.logger_dict.keys()
 
-        if not show_category:
-            show_category = Logger.log_category
-
         exist_category=set([])
         for logger_tags in show_logger:
             exist_category.update(Logger.logger_dict[logger_tags])
 
-        show_category = [c for c in show_category if c in exist_category]
+        if show_category:
+            show_category = [c for c in show_category if c in exist_category]
+        else:
+            show_category = exist_category
 
         fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))#,constrained_layout=True)
         plt.ticklabel_format(style='plain', axis='x', useOffset=False)
@@ -109,7 +109,7 @@ class Logger:
         plt.close()
 
     @staticmethod
-    def plot_history(name,show_logger=None,
+    def plot_multi_history(show_logger=None,show_tag=None,
              show_category=None,
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set2.colors,
@@ -117,17 +117,102 @@ class Logger:
              filename='logger_history.png',
              save=True,
              show=True):
-        history_df =  Logger.history['records']
-        history_df = history_df[history_df.name==name].drop(columns=['name'])
 
         if not show_logger:
-            show_logger = list(history_df.tag.unique())
+            show_logger=Logger.name
+
+        if isinstance(show_logger,str):
+            Logger.plot_history(show_logger=show_logger,show_tag=show_tag,
+             show_category=show_category,
+             figsize=figsize,
+             cmp=cmp,
+             ylim=ylim,
+             filename=filename,
+             save=save,
+             show=show)
+            return
+        history_df =  Logger.history['records']
+        history_df = history_df[history_df.name.apply(lambda x: x in show_logger )]
+        if not show_tag:
+            show_tag = list(history_df.tag.unique())
 
         exist_category=set([])
-        for logger_tag in show_logger:
+        for logger_tag in show_tag:
+            _tmp=history_df[history_df.tag==logger_tag].drop(columns=['epoch','tag','name'])
+            _tmp = _tmp.dropna(axis=1)
+            exist_category.update(_tmp.columns)
+
+        if show_category:
+            show_category = [c for c in show_category if c in exist_category]
+        else:
+            show_category=exist_category
+
+        fig, axs = plt.subplots(len(show_tag),len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]*len(show_tag)))#,constrained_layout=True)
+        plt.ticklabel_format(style='plain', axis='x', useOffset=False)
+
+        axs = np.array(axs).flatten()
+
+        for lidx,logger_tag in enumerate(show_tag):
+            for cidx,c in enumerate(show_category):
+                axidx = lidx*len(show_category)+cidx
+                for nidx,n in enumerate(show_logger):
+                    plot_color = cmp[nidx]
+                    _record=history_df[(history_df.tag==logger_tag) & (history_df.name==n)]
+                    if c in _record.drop(columns=['epoch','tag']).dropna(axis=1).columns:
+                        _record = _record.reset_index(drop=True)
+                        axs[axidx].plot(range(len(_record)),_record[c],label='{}({})'.format(n,logger_tag),color=plot_color,linewidth=2)
+                        axs[axidx].set_title('{}'.format(c), fontsize=20)
+                        axs[axidx].legend(loc='upper left',fontsize=15)
+                        axs[axidx].tick_params(axis='both', labelsize=15)
+                        axs[axidx].grid(axis='y', linestyle='-', alpha=0.7,color='lightgray')
+                        axs[axidx].xaxis.set_major_locator(MaxNLocator(integer=True))
+                        if c in ylim.keys():
+                            axs[axidx].set_ylim(ylim[c][0],ylim[c][1])
+        plt.tight_layout()
+        if save:
+            plt.savefig(os.path.join(Logger.save_dir,filename))
+        if show:
+            plt.show()
+        plt.close()
+
+    @staticmethod
+    def plot_history(show_logger=None,show_tag=None,
+             show_category=None,
+             figsize=(7.6*1.5,5*1.5),
+             cmp=mpl.cm.Set2.colors,
+             ylim={},
+             filename='logger_history.png',
+             save=True,
+             show=True):
+
+        if not show_logger:
+            show_logger=Logger.name
+
+        if isinstance(show_logger,list):
+            Logger.plot_multi_history(show_logger=show_logger,show_tag=show_tag,
+             show_category=show_category,
+             figsize=figsize,
+             cmp=cmp,
+             ylim=ylim,
+             filename=filename,
+             save=save,
+             show=show)
+            return
+
+
+
+        history_df =  Logger.history['records']
+        history_df = history_df[history_df.name == show_logger].drop(columns=['name'])
+
+        if not show_tag:
+            show_tag = list(history_df.tag.unique())
+
+        exist_category=set([])
+        for logger_tag in show_tag:
             _tmp=history_df[history_df.tag==logger_tag].drop(columns=['epoch','tag'])
             _tmp = _tmp.dropna(axis=1)
             exist_category.update(_tmp.columns)
+
         if show_category:
             show_category = [c for c in show_category if c in exist_category]
         else:
@@ -138,10 +223,10 @@ class Logger:
 
         axs = np.array(axs).flatten()
 
-        for lidx,logger_tag in enumerate(show_logger):
+        for lidx,logger_tag in enumerate(show_tag):
             plot_color = cmp[lidx]
             for cidx,c in enumerate(show_category):
-                if c in Logger.logger_dict[logger_tag]:
+                if c in history_df[history_df.tag==logger_tag].drop(columns=['epoch','tag']).dropna(axis=1).columns:
                     _record=history_df[history_df.tag==logger_tag]
                     _record = _record.reset_index(drop=True)
                     axs[cidx].plot(range(len(_record)),_record[c],label=logger_tag,color=plot_color,linewidth=2)
@@ -201,7 +286,7 @@ class Logger:
 #example
 if __name__ == '__main__':
     # Logger.load_logger(os.path.join(Logger.save_dir,'logger_history.pkl'))
-    Logger.init('test')
+    Logger.init('test3')
     config = Logger.config
     config.batch=24
     config.lr=0.1
@@ -221,5 +306,5 @@ if __name__ == '__main__':
                 save=True)
     # Logger.export_logger()
     # Logger.load_logger(os.path.join(Logger.save_dir,'logger_history.pkl'))
-    # Logger.plot_history(name='test2')
+    # Logger.plot_history(show_logger=['test2','test'])
     # print(Logger.history['configs']['test2'])
