@@ -141,7 +141,7 @@ class Model_Instance():
     def run_dataloader(self,dataloader,logger=None,update=True):
         recorder = Recorder()
         self.run_iter=0
-        trange = tqdm(dataloader,total=len(dataloader),desc=logger.name if logger else '',bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}{r_bar}')
+        trange = tqdm(dataloader,total=len(dataloader),desc=logger.tag if logger else '',bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}{r_bar}')
 
         for _iter,(data,label) in enumerate(dataloader) :
             self.run_iter=_iter+1

@@ -8,6 +8,10 @@ from model_instance import Model_Instance
 from dataset import NormalDataset
 from sklearn.metrics import accuracy_score
 
+# init logger and define config
+Logger.init('Version1')
+config = Logger.config
+
 # Define Dataset
 training_dataloader,valid_dataloader = get_dataloader()
 
@@ -20,12 +24,13 @@ def evaluation_fn(pred,label):
 
 # Create model instance
 model = get_model()
-optimizer = torch.optim.AdamW(model.parameters(),lr=cfg.lr)
+optimizer = torch.optim.AdamW(model.parameters(),lr=config.lr)
 model_instance = Model_Instance(model=model,
                                 optimizer=optimizer,
                                 loss_fn=loss_fn,evaluation_fn=evaluation_fn)
 
 # Create Logger
+
 training_logger = Logger('train')
 valid_logger = Logger('valid')
 
