@@ -55,6 +55,26 @@ Logger.plot()
 ```
 ![](https://github.com/Coolshanlan/Efficient-Pytorch-Template/blob/main/image/logger_example1.png)
 
+
+# Requests
+## Dataset Output Format
+Dataset output must be **(data,label)**
+
+Data and label can be **dictionary** if you need multi-input or multiple label
+> you can get your dictionary data in model input
+
+```python
+class DemoDataset(Dataset):
+    def __getitem__(self,idx):
+        return data[idx],labels[idx]
+```
+
+## Model Output
+Your model output shape must be constant in every single data
+> Slot tagging output shape are not constant.
+
+You can overwrite `Model_Instance.run_dataloader` function or use `Model_Instance.run_model` get each batch output and run dataloader by your self.
+
 # Tutorial
 ## Model Instance
 ### OverView
@@ -64,14 +84,16 @@ class Model_Instance():
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter=False,
+                 scheduler_iter_unit=False,
                  loss_function=None,
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
                  device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
                  save_dir ='checkpoint',
                  amp=False,
-                 accum_iter=1):
+                 accum_iter=1,
+                 model_weight_init=None):
+
 
 def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
@@ -96,6 +118,7 @@ def load_model(self,only_model=True,path=None):
 - **save_dir** the dir to store model checkpoint
 - **amp** `amp=True`, Enable Automatic Mixed Precision
 - **accum_iter** `accum_iter=N` if (N>1), Enable Gradient Accumulation else N=1
+- **model_weight_init** options -> ['normal','xavier','kaiming','orthogonal']
 
 ### Loss Function Define
   ```python
@@ -130,6 +153,34 @@ It also will display in terminal after each epoch.
 eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
 ```
 ## Logger
+### Example Cpde
+```python
+# initialize Logger with experiment name
+Logger.init(experiment_name)
+
+# define config (option)
+config = Logger.config
+config.batch_size=32
+config.lr=1e-3
+#etc.
+
+# define training logger to record training log
+train_logger = Logger('Train')
+# define validation logger to record evaluation log
+valid_logger = Logger('Valid')
+
+for e in range(epoch):
+  model_instance.run_dataloader(dataloader=train_dataloader,
+                                logger=train_logger)
+  model_instance.run_dataloader(dataloader=valid_dataloader,
+                                logger=valid_logger)
+  # check best epoch
+  if valid_logger.check_best(category='loss',mode='min'):
+    model_instance.save(filename='best_model.pkl')
+
+Logger.plot()
+Logger.export()
+```
 ### Plot
 ```python
 @staticmethod
