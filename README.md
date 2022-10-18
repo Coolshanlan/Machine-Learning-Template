@@ -9,8 +9,10 @@ from dataset import NormalDataset
 from sklearn.metrics import accuracy_score
 
 # init logger and define config
-Logger.init('Version1')
+Logger.init('test1')
 config = Logger.config
+config.batch_size=32
+config.lr=1e-3
 
 # Define Dataset
 training_dataloader,valid_dataloader = get_dataloader()
@@ -29,17 +31,19 @@ model_instance = Model_Instance(model=model,
                                 optimizer=optimizer,
                                 loss_fn=loss_fn,evaluation_fn=evaluation_fn)
 
-# Create Logger
-
-training_logger = Logger('train')
-valid_logger = Logger('valid')
+# define training logger to record training log
+train_logger = Logger('Train')
+# define validation logger to record evaluation log
+valid_logger = Logger('Valid')
 
 # Start training
 for epoch in range(cfg.epoch):
-  record,evaluation = model_instance.run_dataloader(train_dataloader,logger=training_logger,update=True)
+  record,evaluation = model_instance.run_dataloader(train_dataloader,logger=train_logger,update=True)
   record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
-  if valid_logger.check_best('loss',mode='min):
-    model_instance.save(only_model=True,filename='best_model.pkl')
+
+  # save best model
+  if valid_logger.check_best('loss',mode='min'):
+    model_instance.save()
 
 # Inference - Case1 dataloader
 test_dataloader=get_dataloader()
@@ -48,10 +52,9 @@ preds = model_instance.inference_dataloader(test_dataloader)
 # Inference -Case2 Only Data
 preds = model.instance(data)
 
-
-
 # Visualize training history
 Logger.plot()
+Logger.export()
 ```
 ![](https://github.com/Coolshanlan/Efficient-Pytorch-Template/blob/main/image/logger_example1.png)
 
