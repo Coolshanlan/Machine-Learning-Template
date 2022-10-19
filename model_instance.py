@@ -60,7 +60,11 @@ class Recorder(dict):
         return_dict={}
         for k in self.keys():
             if  k in concat:
-                return_dict[k] = np.concatenate(self[k],axis=0)
+                try:
+                    return_dict[k] = np.concatenate(self[k],axis=0)
+                except:
+                    #print('model output shape are not constant')
+                    return_dict[k] = self[k]
             else:
                 return_dict[k] = self[k]
         return return_dict
