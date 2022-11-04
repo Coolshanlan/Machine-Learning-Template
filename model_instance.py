@@ -11,14 +11,21 @@ from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_
 
 
 def calculate_metrics(metrics_name):#List
+    def preprocess_pred_format(pred):
+        if len(pred.shape)==1:
+            return pred>=0.5
+        else:
+            return pred.argmax(axis=1)
+
     metrics_functions={}
-    metrics_functions['acc']=lambda pred,label:accuracy_score(label,pred>=0.5)
-    metrics_functions['f1_score']=lambda pred,label: f1_score(label,pred>=0.5, average='macro')
-    metrics_functions['recall']=lambda pred,label: recall_score(label,pred>=0.5, average='macro')
-    metrics_functions['precision']=lambda pred,label: precision_score(label,pred>=0.5, average='macro')
+    metrics_functions['acc']=lambda pred,label: accuracy_score(label,preprocess_pred_format(pred))
+    metrics_functions['f1_score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['f1score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['recall']=lambda pred,label: recall_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['precision']=lambda pred,label: precision_score(label,preprocess_pred_format(pred), average='macro')
     metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred)
-    if metrics_name not in metrics_functions.keys():
-        raise f'metrics not support'
+    if not set(metrics_name).issubset(set(metrics_functions.keys())):
+        raise Exception(f'{set(metrics_name) - set(metrics_functions.keys())} metrics not support')
     return lambda pred,label: {name:metrics_functions[name](pred,label)for name in metrics_name}
 
 
