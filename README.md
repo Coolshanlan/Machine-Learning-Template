@@ -17,19 +17,16 @@ config.lr=1e-3
 # Define Dataset
 training_dataloader,valid_dataloader = get_dataloader()
 
-# Define loss and evaluation function
+# Define loss
 def loss_fn(pred,label):
   return nn.CrossEntropyLoss()(pred,label)
-
-def evaluation_fn(pred,label):
-  return {'acc':accuracy_score(label,pred)}
 
 # Create model instance
 model = get_model()
 optimizer = torch.optim.AdamW(model.parameters(),lr=config.lr)
 model_instance = Model_Instance(model=model,
                                 optimizer=optimizer,
-                                loss_fn=loss_fn,evaluation_fn=evaluation_fn)
+                                loss_fn=loss_fn,evaluation_fn=['acc],'f1score'])
 
 # define training logger to record training log
 train_logger = Logger('Train')
