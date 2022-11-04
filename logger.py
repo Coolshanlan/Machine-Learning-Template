@@ -77,7 +77,7 @@ class Logger:
         return (len(self.record)-1)==best_index
 
     @staticmethod
-    def plot(show_logger=None,
+    def plot(show_tag=None,
              show_category=None,
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set2.colors,
@@ -86,11 +86,11 @@ class Logger:
              save=True,
              show=True):
 
-        if not show_logger:
-            show_logger = Logger.logger_dict.keys()
+        if not show_tag:
+            show_tag = Logger.logger_dict.keys()
 
         exist_category=set([])
-        for logger_tags in show_logger:
+        for logger_tags in show_tag:
             exist_category.update(Logger.logger_dict[logger_tags].drop(columns=['epoch']))
 
         if show_category:
@@ -103,7 +103,7 @@ class Logger:
 
         axs = np.array(axs).flatten()
 
-        for lidx,logger_tags in enumerate(show_logger):
+        for lidx,logger_tags in enumerate(show_tag):
             plot_color = cmp[lidx]
             for cidx,c in enumerate(show_category):
                 if c in Logger.logger_dict[logger_tags]:
@@ -126,20 +126,20 @@ class Logger:
         plt.close()
 
     @staticmethod
-    def plot_history(show_logger=None,show_tag=None,
+    def plot_experiment(show_experiment=None,show_tag=None,
              show_category=None,
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set2.colors,
              ylim={},
-             filename='logger_history.png',
+             filename='experiments_history.png',
              save=True,
              show=True):
 
-        if not show_logger:
-            show_logger=Logger.name
+        if not show_experiment:
+            show_experiment=Logger.name
 
-        if isinstance(show_logger,list):
-            Logger.plot_multi_history(show_logger=show_logger,show_tag=show_tag,
+        if isinstance(show_experiment,list):
+            Logger.plot_multi_experiment(show_experiment=show_experiment,show_tag=show_tag,
              show_category=show_category,
              figsize=figsize,
              cmp=cmp,
@@ -152,7 +152,7 @@ class Logger:
 
 
         history_df =  Logger.history['records']
-        history_df = history_df[history_df.name == show_logger].drop(columns=['name'])
+        history_df = history_df[history_df.name == show_experiment].drop(columns=['name'])
 
         if not show_tag:
             show_tag = list(history_df.tag.unique())
@@ -196,7 +196,7 @@ class Logger:
         plt.close()
 
     @staticmethod
-    def plot_multi_history(show_logger=None,show_tag=None,
+    def plot_multi_experiment(show_experiment=None,show_tag=None,
              show_category=None,
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set1.colors,
@@ -205,14 +205,14 @@ class Logger:
              save=True,
              show=True):
 
-        if not show_logger:
-            show_logger=list(Logger.history['records'].name.unique())
+        if not show_experiment:
+            show_experiment=list(Logger.history['records'].name.unique())
 
-        if len(show_logger)==1:
-            show_logger=show_logger[0]
+        if len(show_experiment)==1:
+            show_experiment=show_experiment[0]
 
-        if isinstance(show_logger,str):
-            Logger.plot_history(show_logger=show_logger,show_tag=show_tag,
+        if isinstance(show_experiment,str):
+            Logger.plot_experiment(show_experiment=show_experiment,show_tag=show_tag,
              show_category=show_category,
              figsize=figsize,
              cmp=cmp,
@@ -222,7 +222,7 @@ class Logger:
              show=show)
             return
         history_df =  Logger.history['records']
-        history_df = history_df[history_df.name.apply(lambda x: x in show_logger )]
+        history_df = history_df[history_df.name.apply(lambda x: x in show_experiment )]
         if not show_tag:
             show_tag = list(history_df.tag.unique())
 
@@ -247,7 +247,7 @@ class Logger:
             create_subtitle(fig, grid[lidx, ::], logger_tag)
             for cidx,c in enumerate(show_category):
                 axidx = lidx*len(show_category)+cidx
-                for nidx,n in enumerate(show_logger):
+                for nidx,n in enumerate(show_experiment):
                     plot_color = cmp[nidx]
                     _record=history_df[(history_df.tag==logger_tag) & (history_df.name==n)]
                     if c in _record.drop(columns=['epoch','tag']).dropna(axis=1).columns:

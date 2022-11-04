@@ -17,19 +17,13 @@ config.lr=1e-3
 # Define Dataset
 training_dataloader,valid_dataloader = get_dataloader()
 
-# Define loss and evaluation function
-def loss_fn(pred,label):
-  return nn.CrossEntropyLoss()(pred,label)
-
-def evaluation_fn(pred,label):
-  return {'acc':accuracy_score(label,pred)}
-
 # Create model instance
 model = get_model()
 optimizer = torch.optim.AdamW(model.parameters(),lr=config.lr)
 model_instance = Model_Instance(model=model,
                                 optimizer=optimizer,
-                                loss_fn=loss_fn,evaluation_fn=evaluation_fn)
+                                loss_fn=nn.CrossEntropyLoss(),
+                                evaluation_fn=['acc','f1score'])
 
 # define training logger to record training log
 train_logger = Logger('Train')
@@ -42,7 +36,7 @@ for epoch in range(cfg.epoch):
   record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
 
   # save best model
-  if valid_logger.check_best('loss',mode='min'):
+  if valid_logger.check_best('loss'):
     model_instance.save()
 
 # Inference - Case1 dataloader
@@ -123,12 +117,12 @@ def load_model(self,only_model=True,path=None):
 - **accum_iter** `accum_iter=N` if (N>1), Enable Gradient Accumulation else N=1
 - **model_weight_init** options -> ['normal','xavier','kaiming','orthogonal']
 
-### Loss Function Define
+### Custom Loss Function
   ```python
-  #case 1
+  #case 1 simple loss without name
   def loss_fn(pred,label):
     return your_loss
-  #case 2
+  #case 2 return multiple loss with different names to record
   def loss_fn(pred,label):
     loss_A=...
     loss_B=...
@@ -140,12 +134,18 @@ def load_model(self,only_model=True,path=None):
   train  54%|██████████▊         | 63/117 [00:01<00:01, 46.42it/s, A_loss_Name=5, B_loss_Name=4.2, loss=9.2]
   ```
 
-## Evaluation function Define
+## Custom Evaluation Function
 ```python
+# case1 custom define, return a dictionary
 def evaluation_fn(pred,label):
   acc = get_acc(pred,label)
   f1 = get_f1(pred,label)
   return {'accuracy':acc,'f1_score':f1}
+
+# case2 give a list of metrics names, support 'acc','f1score','precision','recall','auroc'
+model_instance = Model_Instance(evaluation_fn = ['acc','f1score','precision','recall','auroc'])
+
+# case3 ignore
 # if you don't have evaluation metrics,
 # you can ignore evaluation_fn parameter in Model Instance
 ```
@@ -156,7 +156,7 @@ It also will display in terminal after each epoch.
 eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214,f1_score=0.513, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
 ```
 ## Logger
-### Example Cpde
+### Example Code
 ```python
 # initialize Logger with experiment name
 Logger.init(experiment_name)
@@ -168,9 +168,9 @@ config.lr=1e-3
 #etc.
 
 # define training logger to record training log
-train_logger = Logger('Train')
+train_logger = Logger('<Tag1>')#Ex. Training
 # define validation logger to record evaluation log
-valid_logger = Logger('Valid')
+valid_logger = Logger('<Tag2>')#Ex. Validation
 
 for e in range(epoch):
   model_instance.run_dataloader(dataloader=train_dataloader,
@@ -184,10 +184,21 @@ for e in range(epoch):
 Logger.plot()
 Logger.export()
 ```
+
+### Record Multiple Experiments
+you can define the experiment name when initialize Logger
+```python
+Logger.init('<experiment name>')
+```
+
+And plot your all experiment log with
+```python
+Logger.plot_multiple_experiment()
+```
 ### Plot
 ```python
 @staticmethod
-def plot(show_logger=None,
+def plot(show_tag=None,
          show_category=None,
          figsize=(7.6*1.5,5*1.5),
          cmp=mpl.cm.Set2.colors,
@@ -196,7 +207,7 @@ def plot(show_logger=None,
          save=True,
          show=True):
 ```
-- **show_logger** `show_logger=[logger1_name,logger2_name...]` witch **logger** you want to show
-- **show_category** `show_logger=['acc','f1' ...]` witch **evaluation metrics** you want to show, it is depend on tou `evaluation_function`
+- **show_tag** `show_tag=[logger1_tag,logger2_tag...]` witch **logger** you want to show
+- **show_category** `show_category=['acc','f1' ...]` witch **evaluation metrics** you want to show, it is depend on tou `evaluation_function`
 - **save** save figure or not
 - **show** plt.show() or not
