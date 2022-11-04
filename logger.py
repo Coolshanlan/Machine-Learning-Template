@@ -201,7 +201,7 @@ class Logger:
              figsize=(7.6*1.5,5*1.5),
              cmp=mpl.cm.Set1.colors,
              ylim={},
-             filename='logger_history.png',
+             filename='experiments_history.png',
              save=True,
              show=True):
 
