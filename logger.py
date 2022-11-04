@@ -295,7 +295,7 @@ class Logger:
         Logger.history['configs'][Logger.name]=Logger.config
 
         with open(save_path+'.json','w') as f:
-            json_str=json.dumps(Logger.history['configs'])
+            json_str=json.dumps(Logger.history['configs'], indent=2, sort_keys=True)
             f.write(json_str)
 
         Logger.history['records'].to_csv(save_path+'.csv',index=False)
@@ -346,7 +346,7 @@ if __name__ == '__main__':
                 save=True)
 
     # # export logger demo
-    # Logger.export_logger()
+    Logger.export_logger()
 
     # # load logger demo
     # Logger.load_logger(dir_path=Logger.save_dir,filename='logger_history')
