@@ -5,7 +5,22 @@ from torch.cuda.amp import GradScaler
 import torch.functional as F
 import numpy as np
 from tqdm.auto import tqdm
+from sklearn.linear_model import LogisticRegression
 import os
+from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score
+
+
+def calculate_metrics(metrics_name):#List
+    metrics_functions={}
+    metrics_functions['acc']=lambda pred,label:accuracy_score(label,pred>=0.5)
+    metrics_functions['f1_score']=lambda pred,label: f1_score(label,pred>=0.5, average='macro')
+    metrics_functions['recall']=lambda pred,label: recall_score(label,pred>=0.5, average='macro')
+    metrics_functions['precision']=lambda pred,label: precision_score(label,pred>=0.5, average='macro')
+    metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred)
+    if metrics_name not in metrics_functions.keys():
+        raise f'metrics not support'
+    return lambda pred,label: {name:metrics_functions[name](pred,label)for name in metrics_name}
+
 
 def init_weights(net, init_type='normal', gain=0.02):
     def init_func(m):
@@ -95,6 +110,8 @@ class Model_Instance():
         self.loss_criterial = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
+        if isinstance(self.evaluation_fn,list):
+            self.evaluation_fn=calculate_metrics(self.evaluation_fn)
         self.device = device
         self.amp=amp
         self.accum_iter=accum_iter
@@ -226,3 +243,13 @@ class Model_Instance():
     def load(self,only_model=True,filename='model_checkpoint.pkl'):
         path = path if path else os.path.join(self.save_dir,'model_checkpoint.pkl')
         self.model.load_state_dict(torch.load(path))
+
+
+class Ensemble_Instance():
+    def __init__(self,
+                 ensemble_model=LogisticRegression,
+                 model_list=[],
+                 ):
+        self.ensemble_model = ensemble_model
+        self.model_list = model_list
+
