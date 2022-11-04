@@ -8,8 +8,8 @@ from model_instance import Model_Instance
 from dataset import NormalDataset
 from sklearn.metrics import accuracy_score
 
-# init logger and define config
-Logger.init('test1')
+# init logger and record config
+Logger.init('test1') #experiment name
 config = Logger.config
 config.batch_size=32
 config.lr=1e-3
@@ -36,15 +36,15 @@ for epoch in range(cfg.epoch):
   record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
 
   # save best model
-  if valid_logger.check_best('loss'):
-    model_instance.save()
+  if valid_logger.check_best('acc',mode='max'):
+    model_instance.save() # default path ./checkpoint/model_checkpoint.pkl
+
+# Load best model
+model_instance.load() # default path ./checkpoint/model_checkpoint.pkl
 
 # Inference - Case1 dataloader
 test_dataloader=get_dataloader()
 preds = model_instance.inference_dataloader(test_dataloader)
-
-# Inference -Case2 Only Data
-preds = model.instance(data)
 
 # Visualize training history
 Logger.plot()
@@ -52,6 +52,12 @@ Logger.export()
 ```
 ![](https://github.com/Coolshanlan/Efficient-Pytorch-Template/blob/main/image/logger_example1.png)
 
+# Features
+- Model Instance
+- Logger
+  - Experiment Record
+  - Plot
+- Ensemble Model Instance
 
 # Requests
 ## Dataset Output Format
@@ -134,7 +140,7 @@ def load_model(self,only_model=True,path=None):
   train  54%|██████████▊         | 63/117 [00:01<00:01, 46.42it/s, A_loss_Name=5, B_loss_Name=4.2, loss=9.2]
   ```
 
-## Custom Evaluation Function
+### Custom Evaluation Function
 ```python
 # case1 custom define, return a dictionary
 def evaluation_fn(pred,label):
