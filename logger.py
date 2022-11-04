@@ -1,4 +1,3 @@
-from cv2 import DESCRIPTOR_MATCHER_BRUTEFORCE
 import pandas as pd
 import numpy as np
 import json
@@ -6,7 +5,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from matplotlib.gridspec import SubplotSpec
 import matplotlib as mpl
-import pickle
 import os
 
 
