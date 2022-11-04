@@ -50,7 +50,7 @@ def setSeed(seed=31,tor=True,tensorf=False):
     if tor:
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
+        #torch.backends.cudnn.deterministic = True
 
 def move_to(obj,**kwargs):
     if torch.is_tensor(obj):

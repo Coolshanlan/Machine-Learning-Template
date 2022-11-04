@@ -10,7 +10,7 @@ from albumentations.pytorch import ToTensorV2
 
 
 # Machine learning
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score, roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import QuantileTransformer
 from xgboost import XGBClassifier

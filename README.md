@@ -87,7 +87,7 @@ class Model_Instance():
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter_unit=False,
+                 scheduler_iter=False,
                  loss_function=None,
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
@@ -145,7 +145,7 @@ def load_model(self,only_model=True,path=None):
 def evaluation_fn(pred,label):
   acc = get_acc(pred,label)
   f1 = get_f1(pred,label)
-  return {'accuracy':acc,'f1 score':f1}
+  return {'accuracy':acc,'f1_score':f1}
 # if you don't have evaluation metrics,
 # you can ignore evaluation_fn parameter in Model Instance
 ```
@@ -153,7 +153,7 @@ you can use `Logger.plot()` to see metrics record after running `run_dataloader`
 
 It also will display in terminal after each epoch.
 ```console
-eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
+eval  100%|████████████████████| 24/24 [00:00<00:00, 80.28it/s, acc=0.214,f1_score=0.513, A_loss_Name=3.83, B_loss_Name=3.69, loss=7.52]
 ```
 ## Logger
 ### Example Cpde

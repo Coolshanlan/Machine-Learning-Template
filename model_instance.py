@@ -1,5 +1,3 @@
-import torch.nn as nn
-from  torch.utils.data import Dataset,DataLoader
 import torch
 from torch import init
 from torch import autocast
@@ -8,7 +6,6 @@ import torch.functional as F
 import numpy as np
 from tqdm.auto import tqdm
 import os
-import pandas as pd
 
 def init_weights(net, init_type='normal', gain=0.02):
     def init_func(m):
@@ -80,7 +77,7 @@ class Model_Instance():
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter_unit=False,
+                 scheduler_iter=False,
                  loss_function=None,
                  evaluation_function=lambda x,y : {},
                  clip_grad=None,
@@ -94,7 +91,7 @@ class Model_Instance():
         self.save_dir = save_dir
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.scheduler_iter_unit=scheduler_iter_unit
+        self.scheduler_iter=scheduler_iter
         self.loss_criterial = loss_function
         self.clip_grad = clip_grad
         self.evaluation_fn=evaluation_function
@@ -111,7 +108,6 @@ class Model_Instance():
                 self.model_weight_init='normal'
             init_weights(self.model,init_type=self.model_weight_init)
 
-
     def loss_fn(self,pred,label):
         loss_return = self.loss_criterial(pred,label)
         if not isinstance(loss_return,tuple):
@@ -127,8 +123,6 @@ class Model_Instance():
         return loss_return
 
     def model_update(self,loss):
-        if type(loss)==tuple:
-            loss = loss[0]
         # amp enable check
         if self.amp and self.device != torch.device('cpu'):
             self.grad_scaler.scale(loss/self.accum_iter).backward()
@@ -177,7 +171,6 @@ class Model_Instance():
 
         pred=pred.detach().to(torch.device('cpu'))
         loss=loss.detach().to(torch.device('cpu')).item()
-        label=label.detach().to(torch.device('cpu'))
 
         return  pred, (loss,loss_dict)
 
@@ -187,32 +180,33 @@ class Model_Instance():
         self.run_iter=0
         trange = tqdm(dataloader,total=len(dataloader),desc=logger.tag if logger else '',bar_format='{desc:<5.5} {percentage:3.0f}%|{bar:20}{r_bar}')
 
-        for _iter,(data,label) in enumerate(dataloader) :
-            self.run_iter=_iter+1
+        for data,label in dataloader :
+            self.run_iter+=1
 
             pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-            if self.scheduler and self.scheduler_iter_unit and update:
+            if self.scheduler and self.scheduler_iter and update:
                 self.scheduler.step()
 
-            recorder(pred=pred,**loss_dict)
+            recorder(pred=pred,label=label,**loss_dict)
             trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
             trange.update()
 
-        evaluate_dict = self.evaluation_fn(pred,label)
+        outcome=recorder.get_dict(concat=['pred','label'])
+        evaluate_dict = self.evaluation_fn(outcome['pred'],outcome['label'])
         avg_loss_dict=recorder.get_avg(loss_dict.keys())
         record_dict={**evaluate_dict,**avg_loss_dict}
         if logger:
             logger(**record_dict)
         trange.set_postfix(**record_dict)
-        return recorder.get_dict(concat=['pred']),record_dict
+        return outcome,record_dict
 
     @torch.no_grad()
     def inference(self,data):
         self.model.train(False)
         return self._run(data).to(torch.device('cpu'))
 
-    def inference_dataloader(self,dataloader):
+    def inferance_dataloader(self,dataloader):
         reocord = Recorder()
         trange = tqdm(dataloader,total=len(dataloader))
         for data in dataloader :
@@ -229,9 +223,6 @@ class Model_Instance():
             #save model instance
             pass
 
-    def load_model(self,path=None):
+    def load(self,only_model=True,filename='model_checkpoint.pkl'):
         path = path if path else os.path.join(self.save_dir,'model_checkpoint.pkl')
         self.model.load_state_dict(torch.load(path))
-
-    def load_model_instance(self,path=None):
-        pass

@@ -14,6 +14,8 @@ plt.rcParams["font.family"] = "Serif"
 class Config(dict):
     def __setattr__(self, attr,val):
         self[attr]=val
+    def __getattr__(self, attr):
+        return self[attr]
     def __call__(self, **kwargs):
         for k,v in kwargs.items():
             self[k]=v
@@ -343,15 +345,15 @@ if __name__ == '__main__':
                 show=False,
                 save=True)
 
-    # export logger demo
-    Logger.export_logger()
+    # # export logger demo
+    # Logger.export_logger()
 
-    # load logger demo
-    Logger.load_logger(dir_path=Logger.save_dir,filename='logger_history')
+    # # load logger demo
+    # Logger.load_logger(dir_path=Logger.save_dir,filename='logger_history')
 
-    # remove demo
-    Logger.remove_history(name='test3')
-    Logger.export_logger(read_if_exist=False)
+    # # remove demo
+    # Logger.remove_history(name='test3')
+    # Logger.export_logger(read_if_exist=False)
 
-    Logger.plot_multi_history(show_category=['acc','f1score'],filename='all_history.png',show=False)
-    # print(Logger.history['configs']['test2'])
+    # Logger.plot_multi_history(show_category=['acc','f1score'],filename='all_history.png',show=False)
+    # # print(Logger.history['configs']['test2'])
