@@ -19,9 +19,8 @@ training_dataloader,valid_dataloader = get_dataloader()
 
 # Create model instance
 model = get_model()
-optimizer = torch.optim.AdamW(model.parameters(),lr=config.lr)
 model_instance = Model_Instance(model=model,
-                                optimizer=optimizer,
+                                optimizer=torch.optim.AdamW(model.parameters(),lr=config.lr),
                                 loss_fn=nn.CrossEntropyLoss(),
                                 evaluation_fn=['acc','f1score'])
 
