@@ -9,7 +9,7 @@ from dataset import NormalDataset
 from sklearn.metrics import accuracy_score
 
 # init logger and record config
-Logger.init('test1') #experiment name
+Logger.init('Experiment1')
 config = Logger.config
 config.batch_size=32
 config.lr=1e-3

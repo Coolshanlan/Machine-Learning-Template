@@ -32,19 +32,19 @@ class Logger:
     log_category=set([])
     save_dir='logger_dir'
     config=None
-    name=None
-    history={'records':pd.DataFrame(columns=['name','epoch','tag']),
+    experiment_name=None
+    history={'records':pd.DataFrame(columns=['experiment_name','epoch','tag']),
              'configs':{}}
 
     @staticmethod
-    def init(name):
+    def init(experiment_name):
         Logger.config=Config()
-        Logger.name=name
-        Logger.history[Logger.name]={}
+        Logger.experiment_name=experiment_name
+        Logger.history[Logger.experiment_name]={}
 
     def __init__(self,tag):
-        if not Logger.name:
-            raise Exception('Use Logger.init(name) to initial Logger first.')
+        if not Logger.experiment_name:
+            raise Exception('Use Logger.init(experiment_name) to initial Logger first.')
 
         self.tag=tag
         self.record=pd.DataFrame()
@@ -117,7 +117,7 @@ class Logger:
                     axs[cidx].xaxis.set_major_locator(MaxNLocator(integer=True))
                     if c in ylim.keys():
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
-        fig.suptitle(Logger.name,fontsize=22)
+        fig.suptitle(Logger.experiment_name,fontsize=22)
         plt.tight_layout()
         if save:
             plt.savefig(os.path.join(Logger.save_dir,filename))
@@ -136,7 +136,7 @@ class Logger:
              show=True):
 
         if not show_experiment:
-            show_experiment=Logger.name
+            show_experiment=Logger.experiment_name
 
         if isinstance(show_experiment,list):
             Logger.plot_multi_experiment(show_experiment=show_experiment,show_tag=show_tag,
@@ -152,7 +152,7 @@ class Logger:
 
 
         history_df =  Logger.history['records']
-        history_df = history_df[history_df.name == show_experiment].drop(columns=['name'])
+        history_df = history_df[history_df.experiment_name == show_experiment].drop(columns=['experiment_name'])
 
         if not show_tag:
             show_tag = list(history_df.tag.unique())
@@ -187,10 +187,10 @@ class Logger:
                     axs[cidx].xaxis.set_major_locator(MaxNLocator(integer=True))
                     if c in ylim.keys():
                         axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
-        fig.suptitle(Logger.name,fontsize=22)
+        fig.suptitle(Logger.experiment_name, fontsize=22)
         plt.tight_layout()
         if save:
-            plt.savefig(os.path.join(Logger.save_dir,filename))
+            plt.savefig(os.path.join(Logger.save_dir, filename))
         if show:
             plt.show()
         plt.close()
@@ -206,7 +206,7 @@ class Logger:
              show=True):
 
         if not show_experiment:
-            show_experiment=list(Logger.history['records'].name.unique())
+            show_experiment=list(Logger.history['records'].experiment_name.unique())
 
         if len(show_experiment)==1:
             show_experiment=show_experiment[0]
@@ -222,13 +222,13 @@ class Logger:
              show=show)
             return
         history_df =  Logger.history['records']
-        history_df = history_df[history_df.name.apply(lambda x: x in show_experiment )]
+        history_df = history_df[history_df.experiment_name.apply(lambda x: x in show_experiment )]
         if not show_tag:
             show_tag = list(history_df.tag.unique())
 
         exist_category=set([])
         for logger_tag in show_tag:
-            _tmp=history_df[history_df.tag==logger_tag].drop(columns=['epoch','tag','name'])
+            _tmp=history_df[history_df.tag==logger_tag].drop(columns=['epoch','tag','experiment_name'])
             _tmp = _tmp.dropna(axis=1)
             exist_category.update(_tmp.columns)
 
@@ -249,7 +249,7 @@ class Logger:
                 axidx = lidx*len(show_category)+cidx
                 for nidx,n in enumerate(show_experiment):
                     plot_color = cmp[nidx]
-                    _record=history_df[(history_df.tag==logger_tag) & (history_df.name==n)]
+                    _record=history_df[(history_df.tag==logger_tag) & (history_df.experiment_name==n)]
                     if c in _record.drop(columns=['epoch','tag']).dropna(axis=1).columns:
                         _record = _record.reset_index(drop=True)
                         axs[axidx].plot(range(len(_record)),_record[c],label='{}({})'.format(n,logger_tag),color=plot_color,linewidth=2)
@@ -268,10 +268,10 @@ class Logger:
         plt.close()
 
     @staticmethod
-    def remove_history(name):
-        Logger.history['records'] = Logger.history['records'][Logger.history['records'].name != name]
-        if name in Logger.history['configs'].keys():
-            del Logger.history['configs'][name]
+    def remove_history(experiment_name):
+        Logger.history['records'] = Logger.history['records'][Logger.history['records'].experiment_name != experiment_name]
+        if experiment_name in Logger.history['configs'].keys():
+            del Logger.history['configs'][experiment_name]
 
     @staticmethod
     def export_logger(dir_path=None,filename='logger_history',read_if_exist=True,overwrite_if_exist=True):
@@ -284,13 +284,13 @@ class Logger:
         for k,v in Logger.logger_dict.items():
             v['tag'] = k
             combine_df = pd.concat([combine_df,v])
-        combine_df['name']=Logger.name
+        combine_df['experiment_name']=Logger.experiment_name
 
         if overwrite_if_exist:
-            Logger.remove_history(Logger.name)
+            Logger.remove_history(Logger.experiment_name)
 
         Logger.history['records']=pd.concat([combine_df,Logger.history['records']])
-        Logger.history['configs'][Logger.name]=Logger.config
+        Logger.history['configs'][Logger.experiment_name]=Logger.config
 
         with open(save_path+'.json','w') as f:
             json_str=json.dumps(Logger.history['configs'], indent=2, sort_keys=True)
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     # Logger.load_logger(dir_path=Logger.save_dir,filename='logger_history')
 
     # # remove demo
-    # Logger.remove_history(name='test3')
+    # Logger.remove_history(experiment_name='test3')
     # Logger.export_logger(read_if_exist=False)
 
     # Logger.plot_multi_history(show_category=['acc','f1score'],filename='all_history.png',show=False)

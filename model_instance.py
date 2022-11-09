@@ -260,3 +260,6 @@ class Ensemble_Instance():
         self.ensemble_model = ensemble_model
         self.model_list = model_list
 
+    def run_dataloader(self,dataloader):
+        pass
+
