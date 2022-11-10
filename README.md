@@ -101,7 +101,7 @@ def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
 
 def run_dataloader(self,dataloader,logger=None,update=True):
-  return outcome, record_dict #outcome['pred']/outcome['label'] , record_dict['loss ... ']/record_dict['metrix ... ']
+  return outcome, record_dict #outcome['pred']/outcome['label'] , record_dict['loss ... ']/record_dict['metrics ... ']
 
 @torch.no_grad()
 def inference(self,data):
