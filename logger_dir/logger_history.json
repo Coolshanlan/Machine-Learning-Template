@@ -1,7 +1,17 @@
 {
+  "test1": {
+    "batch": 2,
+    "lr": 0.5,
+    "seed": 54
+  },
   "test2": {
-    "batch": 243,
-    "lr": 0.1,
+    "batch": 3,
+    "lr": 0.3,
+    "seed": 54
+  },
+  "test3": {
+    "batch": 3,
+    "lr": 0.3,
     "seed": 54
   }
 }
