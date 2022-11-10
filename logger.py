@@ -163,7 +163,7 @@ class Logger:
         if show_category:
             show_category = [c for c in show_category if c in exist_category]
         else:
-            show_category=exist_category
+            show_category=sorted(exist_category)
 
         fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))#,constrained_layout=True)
         plt.ticklabel_format(style='plain', axis='x', useOffset=False)
