@@ -21,8 +21,8 @@ training_dataloader,valid_dataloader = get_dataloader()
 model = get_model()
 model_instance = Model_Instance(model=model,
                                 optimizer=torch.optim.AdamW(model.parameters(),lr=config.lr),
-                                loss_fn=nn.CrossEntropyLoss(),
-                                evaluation_fn=['acc','f1score'])
+                                loss_function=nn.CrossEntropyLoss(),
+                                evaluation_function=['acc','f1score'])
 
 # define training logger to record training log
 train_logger = Logger('Train')
@@ -31,8 +31,8 @@ valid_logger = Logger('Valid')
 
 # Start training
 for epoch in range(cfg.epoch):
-  record,evaluation = model_instance.run_dataloader(train_dataloader,logger=train_logger,update=True)
-  record,evaluation = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
+  outcome,record = model_instance.run_dataloader(train_dataloader,logger=train_logger,update=True)
+  outcome,record = model_instance.run_dataloader(valid_dataloader,logger=valid_logger,update=False)
 
   # save best model
   if valid_logger.check_best('acc',mode='max'):
@@ -101,7 +101,7 @@ def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
 
 def run_dataloader(self,dataloader,logger=None,update=True):
-  return record_dict, evaluation_dict
+  return outcome, record_dict #outcome['pred']/outcome['label'] , record_dict['loss ... ']/record_dict['metrics ... ']
 
 @torch.no_grad()
 def inference(self,data):
