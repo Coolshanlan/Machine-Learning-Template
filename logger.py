@@ -56,10 +56,10 @@ class Logger:
     def __call__(self,**kwargs):
         new_row = pd.DataFrame(kwargs,index=[self.epoch],dtype=np.float64)
         new_row['tag']=self.tag
-        new_row['experiment_name']=self.experiment_name
+        new_row['experiment_name']=Logger.experiment_name
         new_row['epoch']=self.epoch
         self.record=pd.concat([self.record,new_row])
-        Logger.history['records'] = pd.concat([Logger.history['records'],self.record])
+        Logger.history['records'] = pd.concat([Logger.history['records'],new_row])
         self.epoch+=1
 
     def get_last_record(self):
@@ -323,7 +323,7 @@ class Logger:
 
 #example
 if __name__ == '__main__':
-    Logger.load_logger()
+    #Logger.load_logger()
     Logger.init('test3')
     config = Logger.config
     config.batch=3
