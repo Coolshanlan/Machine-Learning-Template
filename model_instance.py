@@ -4,7 +4,7 @@ from torch import autocast
 from torch.cuda.amp import GradScaler
 import torch.functional as F
 import numpy as np
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
 import os
 from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score
