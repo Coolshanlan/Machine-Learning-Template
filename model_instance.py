@@ -1,5 +1,5 @@
 import torch
-from torch import init
+from torch.nn import init
 from torch import autocast
 from torch.cuda.amp import GradScaler
 import torch.functional as F
