@@ -23,7 +23,7 @@ def calculate_metrics(metrics_name):#List
     metrics_functions['f1score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
     metrics_functions['recall']=lambda pred,label: recall_score(label,preprocess_pred_format(pred), average='macro')
     metrics_functions['precision']=lambda pred,label: precision_score(label,preprocess_pred_format(pred), average='macro')
-    metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred)
+    metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred if len(pred.shape) == 1 else pred[:,1])
     if not set(metrics_name).issubset(set(metrics_functions.keys())):
         raise Exception(f'{set(metrics_name) - set(metrics_functions.keys())} metrics not support')
     return lambda pred,label: {name:metrics_functions[name](pred,label)for name in metrics_name}
