@@ -142,7 +142,7 @@ class Model_Instance():
             # display in console
             if 'loss' not in loss_dict.keys():
                 loss_dict['loss'] = loss
-            loss_dict = {k:loss_dict[k].detach().to(torch.device('cpu')) for k in loss_dict.keys()}
+            loss_dict = {k:loss_dict[k].detach().to(torch.device('cpu').item()) for k in loss_dict.keys()}
             loss_return=(loss,loss_dict)
         return loss_return
 
@@ -246,7 +246,7 @@ class Model_Instance():
         else:
             #save model instance
             pass
-
+    #TODO
     def load(self,only_model=True,filename='model_checkpoint.pkl'):
         path = os.path.join(self.save_dir,filename)
         self.model.load_state_dict(torch.load(path))
