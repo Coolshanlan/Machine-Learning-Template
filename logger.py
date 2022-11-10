@@ -73,54 +73,6 @@ class Logger:
         best_index,best_record = self.get_best_record(category,mode)
         return (len(self.record)-1)==best_index
 
-    # @staticmethod
-    # def plot(show_tag=None,
-    #          show_category=None,
-    #          figsize=(7.6*1.5,5*1.5),
-    #          cmp=mpl.cm.Set2.colors,
-    #          ylim={},
-    #          filename='logger_history.png',
-    #          save=True,
-    #          show=True):
-
-    #     if not show_tag:
-    #         show_tag = Logger.logger_dict.keys()
-
-    #     exist_category=set([])
-    #     for logger_tags in show_tag:
-    #         exist_category.update(Logger.logger_dict[logger_tags].drop(columns=['epoch']))
-
-    #     if show_category:
-    #         show_category = [c for c in show_category if c in exist_category]
-    #     else:
-    #         show_category = exist_category
-
-    #     fig, axs = plt.subplots(1,len(show_category),figsize=(len(show_category)*figsize[0]+len(show_category)*0.25,figsize[1]))#,constrained_layout=True)
-    #     plt.ticklabel_format(style='plain', axis='x', useOffset=False)
-
-    #     axs = np.array(axs).flatten()
-
-    #     for lidx,logger_tags in enumerate(show_tag):
-    #         plot_color = cmp[lidx]
-    #         for cidx,c in enumerate(show_category):
-    #             if c in Logger.logger_dict[logger_tags]:
-    #                 _record=Logger.logger_dict[logger_tags]
-    #                 _record = _record.reset_index(drop=True)
-    #                 axs[cidx].plot(range(len(_record)),_record[c],label=logger_tags,color=plot_color,linewidth=2)
-    #                 axs[cidx].set_title('{}'.format(c), fontsize=20)
-    #                 axs[cidx].legend(loc='upper left',fontsize=15)
-    #                 axs[cidx].tick_params(axis='both', labelsize=15)
-    #                 axs[cidx].grid(axis='y', linestyle='-', alpha=0.7,color='lightgray')
-    #                 axs[cidx].xaxis.set_major_locator(MaxNLocator(integer=True))
-    #                 if c in ylim.keys():
-    #                     axs[cidx].set_ylim(ylim[c][0],ylim[c][1])
-    #     fig.suptitle(Logger.experiment_name,fontsize=22)
-    #     plt.tight_layout()
-    #     if save:
-    #         plt.savefig(os.path.join(Logger.save_dir,filename))
-    #     if show:
-    #         plt.show()
-    #     plt.close()
 
     @staticmethod
     def plot(show_experiment=None,show_tag=None,
@@ -349,13 +301,3 @@ if __name__ == '__main__':
 
     # # export logger demo
     Logger.export_logger()
-
-    # # load logger demo
-    # Logger.load_logger(dir_path=Logger.save_dir,filename='logger_history')
-
-    # # remove demo
-    # Logger.remove_history(experiment_name='test3')
-    # Logger.export_logger(read_if_exist=False)
-
-    # Logger.plot_multi_history(show_category=['acc','f1score'],filename='all_history.png',show=False)
-    # # print(Logger.history['configs']['test2'])

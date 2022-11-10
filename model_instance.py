@@ -248,7 +248,7 @@ class Model_Instance():
             pass
 
     def load(self,only_model=True,filename='model_checkpoint.pkl'):
-        path = path if path else os.path.join(self.save_dir,'model_checkpoint.pkl')
+        path = os.path.join(self.save_dir,filename)
         self.model.load_state_dict(torch.load(path))
 
 
