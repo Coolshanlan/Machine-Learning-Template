@@ -24,9 +24,8 @@ model_instance = Model_Instance(model=model,
                                 loss_function=nn.CrossEntropyLoss(),
                                 evaluation_function=['acc','f1score'])
 
-# define training logger to record training log
+# define training/validation logger to record
 train_logger = Logger('Train')
-# define validation logger to record evaluation log
 valid_logger = Logger('Valid')
 
 # Start training
@@ -71,6 +70,14 @@ class DemoDataset(Dataset):
         return data[idx],labels[idx]
 ```
 
+### Inference Dataset Format
+inference data can use `model_instance.inference_dataloader(dataloader)` with dataloader or just use `model_instance.inference(data)` with raw input data
+```python
+class InferenceDemoDataset(Dataset):
+    def __getitem__(self,idx):
+        return data[idx]
+```
+
 ## Model Output
 Your model output shape must be constant in every single data
 > Slot tagging output shape are not constant.
@@ -101,7 +108,8 @@ def run_model(self,data,label,update=True):
   return model_outputs, (loss,loss_dict)
 
 def run_dataloader(self,dataloader,logger=None,update=True):
-  return outcome, record_dict #outcome['pred']/outcome['label'] , record_dict['loss ... ']/record_dict['metrics ... ']
+  return outcome, record_dict
+  #outcome['pred']/outcome['label'] , record_dict['loss ... ']/record_dict['metrics ... ']
 
 @torch.no_grad()
 def inference(self,data):
@@ -111,8 +119,10 @@ def inference_dataloader(self,dataloader):
   return model_outputs
 
 def save(self,only_model=True,filename='model_checkpoint.pkl'):
+  save_path = os.path.join(self.save_dir,filename)
 
-def load_model(self,only_model=True,path=None):
+def load(self,only_model=True,filename='model_checkpoint.pkl'):
+  load_path = os.path.join(self.save_dir,filename)
 ```
 - **scheduler_iter** `scheduler_iter=True`, if your learning scheduler update during per iter then
 - **clip_grad** Clips gradient of an iterable of parameters at specified value.
@@ -198,12 +208,13 @@ Logger.init('<experiment name>')
 
 And plot your all experiment log with
 ```python
-Logger.plot_multiple_experiment()
+Logger.plot_experiments()
 ```
 ### Plot
 ```python
 @staticmethod
-def plot(show_tag=None,
+def plot(experiment_name, #default Logger.experiment
+         show_tag=None,
          show_category=None,
          figsize=(7.6*1.5,5*1.5),
          cmp=mpl.cm.Set2.colors,
@@ -213,6 +224,6 @@ def plot(show_tag=None,
          show=True):
 ```
 - **show_tag** `show_tag=[logger1_tag,logger2_tag...]` witch **logger** you want to show
-- **show_category** `show_category=['acc','f1' ...]` witch **evaluation metrics** you want to show, it is depend on tou `evaluation_function`
+- **show_category** `show_category=['acc','f1' ...]` witch **evaluation metrics** you want to show, it is depend on your `evaluation_function`
 - **save** save figure or not
 - **show** plt.show() or not
