@@ -5,8 +5,6 @@
 ``` python
 from logger import Logger
 from model_instance import Model_Instance
-from dataset import NormalDataset
-from sklearn.metrics import accuracy_score
 
 # init logger and record config
 Logger.init('Experiment1')
