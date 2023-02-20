@@ -6,7 +6,38 @@ import random
 import numpy as np
 import pandas as pd
 import os
+from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score
 
+class Recorder(dict):
+    '''
+
+    '''
+    def __call__(self,**kwargs):
+        for k,v in kwargs.items():
+            if k in self.keys():
+                self[k].append(v)
+            else:
+                self[k]=[]
+                self[k].append(v)
+
+    def get_dict(self,concat=[]):
+        return_dict={}
+        for k in self.keys():
+            if  k in concat:
+                try:
+                    return_dict[k] = np.concatenate(self[k],axis=0)
+                except:
+                    #print('model output shape are not constant')
+                    return_dict[k] = self[k]
+            else:
+                return_dict[k] = self[k]
+        return return_dict
+
+    def get_avg(self,keys):
+        return_dict={}
+        for k in keys:
+            return_dict[k]=np.mean(self[k]).astype(float)
+        return return_dict
 
 def init_weights(net, init_type='normal', gain=0.02):
     def init_func(m):
@@ -38,6 +69,7 @@ def setSeed(seed=31,tor=True,tensorf=False):
     pd.core.common.random_state(seed)
     # tensorflow seed setting
     if tensorf:
+        import tensorflow.compat.v2 as tf
         tf.random.set_seed(seed)
         session_conf = tf.compat.v1.ConfigProto(
             intra_op_parallelism_threads=1,
@@ -53,6 +85,10 @@ def setSeed(seed=31,tor=True,tensorf=False):
         #torch.backends.cudnn.deterministic = True
 
 def move_to(obj,**kwargs):
+    '''
+    move data to gpu.
+    support types of dict, object and list
+    '''
     if torch.is_tensor(obj):
         return obj.to(**kwargs)
     elif isinstance(obj, dict):
@@ -65,3 +101,32 @@ def move_to(obj,**kwargs):
         for v in obj:
             res.append(move_to(v, **kwargs))
         return res
+
+
+def calculate_metrics(metrics_name ):#List
+    '''
+    return a function that contain multiple
+    function input:
+        function(pred,label)
+    function return:
+        dict{metric1:value1, metric2:value2 ...}
+    '''
+    if not isinstance(metrics_name,list):
+        metrics_name=[metrics_name]
+
+    def preprocess_pred_format(pred):
+        if len(pred.shape)==1:
+            return pred>=0.5
+        else:
+            return pred.argmax(axis=1)
+
+    metrics_functions={}
+    metrics_functions['acc']=lambda pred,label: accuracy_score(label,preprocess_pred_format(pred))
+    metrics_functions['f1_score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['f1score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['recall']=lambda pred,label: recall_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['precision']=lambda pred,label: precision_score(label,preprocess_pred_format(pred), average='macro')
+    metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred if len(pred.shape) == 1 else pred[:,1])
+    if not set(metrics_name).issubset(set(metrics_functions.keys())):
+        raise Exception(f'{set(metrics_name) - set(metrics_functions.keys())} metrics not support')
+    return lambda pred,label: {name:metrics_functions[name](pred,label)for name in metrics_name}
