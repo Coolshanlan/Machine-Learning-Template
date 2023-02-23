@@ -17,7 +17,7 @@ class Model_Instance():
                  model,
                  optimizer=None,
                  scheduler=None,
-                 scheduler_iter=True,
+                 scheduler_epoch=False,
                  loss_function=None,
                  evaluation_metrics=lambda x,y : {},
                  clip_grad=None,
@@ -30,7 +30,7 @@ class Model_Instance():
         self.model_weight_init=model_weight_init
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.scheduler_iter=scheduler_iter
+        self.scheduler_epoch=scheduler_epoch
         self.loss_function = loss_function
         self.clip_grad = clip_grad
         self.evaluation_metrics=evaluation_metrics
@@ -99,17 +99,15 @@ class Model_Instance():
         return pred, (loss,loss_dict)
 
     def run_model(self,data,label,update=True):
-        self.model.train(update)
-        amp_enable=self.amp and update
-
+        self.model.train(update or self.amp)
         # amp enable check
-        with autocast(device_type='cuda' if self.device != 'cpu' else 'cpu', dtype=torch.float16,enabled=amp_enable):
-            if update:
-                    pred, (loss,loss_dict) = self.run(data,label)
-                    self.model_update(loss)
-            else:
-                with torch.no_grad():
-                    pred, (loss,loss_dict) = self.run(data,label)
+        if update:
+            with autocast(device_type='cuda' if self.device != 'cpu' else 'cpu', enabled=self.amp):
+                pred, (loss,loss_dict) = self.run(data,label)
+                self.model_update(loss)
+        else:
+            with torch.no_grad():
+                pred, (loss,loss_dict) = self.run(data,label)
 
         pred=pred.detach().to(torch.device('cpu'))
         loss=loss.detach().to(torch.device('cpu')).item()
@@ -118,40 +116,60 @@ class Model_Instance():
 
 #===================== Train and Run Dataset ============================
     def print_record_dict(self,record_dict,tag):
-        print(f'---------\n【{tag}】:')
+        print(f'\n---------\n【{tag}】:')
         for key,value in record_dict.items():
             print(f'{key}\t:{np.round(value,3)}')
         print('---------')
 
-    def run_dataloader(self,dataloader,logger=None,update=True):
+    def get_recorder_result_dict(self,recorder):
+        outcome=recorder.get_dict(concat=['pred','label'])
+        loss_dict = list(recorder.keys())
+        loss_dict.remove('pred')
+        loss_dict.remove('label')
+        evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
+        avg_loss_dict=recorder.get_avg(loss_dict)
+        record_dict={**evaluate_dict,**avg_loss_dict}
+        for k,v in record_dict.items():
+            record_dict[k] = np.round(v,3)
+        return outcome,record_dict
+
+    def run_dataloader(self,
+                       dataloader,
+                       logger=None,
+                       update=True,
+                       display_progress=False,
+                       display_result=True
+                       ):
         recorder = Recorder()
         current_iter=0
         self.update_counter=0
-        logger_tag =logger.tag if logger else 'Result'
+        logger_tag =logger.tag if logger else 'Run Dataloader'
         trange = tqdm(dataloader,total=len(dataloader),desc=logger_tag,bar_format='{desc} {percentage:3.0f}%|{bar:20}{r_bar}')
 
         for data,label in trange :
 
             pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-            if self.scheduler and self.scheduler_iter and update:
+            if not self.scheduler_epoch and update and self.scheduler :
                 self.scheduler.step()
 
             recorder(pred=pred,label=label,**loss_dict)
-            # trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
+
+            if display_progress:
+                trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
 
             current_iter+=1
 
-        if self.scheduler and not self.scheduler_iter and update:
+        if self.scheduler_epoch and update and self.scheduler :
                 self.scheduler.step()
 
+        outcome,record_dict = self.get_recorder_result_dict(recorder)
 
-        outcome=recorder.get_dict(concat=['pred','label'])
-        evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
-        avg_loss_dict=recorder.get_avg(loss_dict.keys())
-        record_dict={**evaluate_dict,**avg_loss_dict}
         record_dict['step']=current_iter
-        self.print_record_dict(record_dict,logger_tag)
+
+        if display_result:
+            self.print_record_dict(record_dict,logger_tag)
+
         if logger:
             logger[logger_tag](**record_dict)
 
@@ -163,59 +181,65 @@ class Model_Instance():
                             valid_step=None,
                             evaluation_function=None,
                             logger=None,
-                            update=True):
-        recorder = Recorder()
+                            update=True,
+                            display_progress=False,
+                            display_result=True):
+
         current_iter=0
         self.update_counter=0
         logger_tag = logger.tag if logger else 'Train'
 
         while(current_iter < run_step):
             trange = tqdm(dataloader,total=len(dataloader),desc=logger_tag,bar_format='{desc} {percentage:3.0f}%|{bar:20}{r_bar}')
-
+            recorder = Recorder()
             for data,label in trange :
 
                 pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-                if self.scheduler and self.scheduler_iter and update:
+                if not self.scheduler_epoch and update and self.scheduler :
                     self.scheduler.step()
 
                 recorder(pred=pred,label=label,**loss_dict)
-                # trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
+
+                if display_progress:
+                    trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
 
                 current_iter+=1
 
                 if (evaluation_function is not None) and (valid_step is not None) and  (current_iter % valid_step == 0):
-                    outcome=recorder.get_dict(concat=['pred','label'])
-                    evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
-                    avg_loss_dict=recorder.get_avg(loss_dict.keys())
-                    record_dict={**evaluate_dict,**avg_loss_dict}
-                    record_dict['step']=current_iter
-                    if logger:
-                        logger[logger_tag](**record_dict)
+                    print(f'\n================= Step: {current_iter} =================')
+                    if logger is not None or display_result:
+                        outcome,record_dict = self.run_dataloader(dataloader,update=False,display_progress=False,display_result=False)
+
+                        if display_result:
+                            self.print_record_dict(record_dict,logger_tag)
+                        if logger:
+                            record_dict['step']=current_iter
+                            logger[logger_tag](**record_dict)
 
                     evaluation_function()
-                    self.print_record_dict(record_dict,logger_tag)
-
 
 
                 if run_step == current_iter:
                     break
 
 
-            if self.scheduler and not self.scheduler_iter and update:
+            if self.scheduler_epoch and update and self.scheduler :
                 self.scheduler.step()
 
+
+            outcome,record_dict = self.get_recorder_result_dict(recorder)
+            print(record_dict)
+
+
         if run_step % valid_step != 0:
-            outcome=recorder.get_dict(concat=['pred','label'])
-            evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
-            avg_loss_dict=recorder.get_avg(loss_dict.keys())
-            record_dict={**evaluate_dict,**avg_loss_dict}
+            outcome,record_dict = self.run_dataloader(dataloader,update=False,display_progress=False,display_result=True)
             record_dict['step']=current_iter
+
             if logger:
                 logger[logger_tag](**record_dict)
 
             evaluation_function()
-            self.print_record_dict(record_dict,logger_tag)
 
         return outcome,record_dict
 
@@ -225,55 +249,57 @@ class Model_Instance():
                              valid_epoch=None,
                              evaluation_function=None,
                              logger=None,
-                             update=True):
-        recorder = Recorder()
+                             update=True,
+                             display_progress=False,
+                             display_result=True):
         current_epoch=0
         self.update_counter=0
         logger_tag = logger.tag if logger else 'Train'
 
         while(current_epoch < run_epoch):
+            recorder = Recorder()
             current_epoch+=1
 
             trange = tqdm(dataloader,total=len(dataloader),desc=logger_tag,bar_format='{desc} {percentage:3.0f}%|{bar:20}{r_bar}')
 
-            for data,label in trange :
+            for data,label in dataloader :
 
                 pred,(loss,loss_dict) = self.run_model(data,label,update=update)
 
-                if self.scheduler and self.scheduler_iter and update:
+                if not self.scheduler_epoch and update and self.scheduler :
                     self.scheduler.step()
 
                 recorder(pred=pred,label=label,**loss_dict)
-                # trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
+                if display_progress:
+                    trange.set_postfix(**recorder.get_avg(loss_dict.keys()))
 
-            if (evaluation_function is not None) and (valid_epoch is not None) and  (current_epoch % valid_epoch == 0):
-                outcome=recorder.get_dict(concat=['pred','label'])
-                evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
-                avg_loss_dict=recorder.get_avg(loss_dict.keys())
-                record_dict={**evaluate_dict,**avg_loss_dict}
-                record_dict['epoch']=current_epoch
-                if logger:
-                    logger[logger_tag](**record_dict)
+                if (evaluation_function is not None) and (valid_epoch is not None) and  (current_epoch % valid_epoch == 0):
+                    print(f'================= Epoch: {current_epoch} =================')
+                    if logger is not None or display_result:
+                        outcome,record_dict = self.run_dataloader(dataloader,update=False,display_progress=False,display_result=False)
 
-                evaluation_function()
-                self.print_record_dict(record_dict,logger_tag)
+                        if display_result:
+                            self.print_record_dict(record_dict,logger_tag)
+                        if logger:
+                            record_dict['epoch']=current_epoch
+                            logger[logger_tag](**record_dict)
 
-            if self.scheduler and not self.scheduler_iter and update:
+
+            if self.scheduler_epoch and update and self.scheduler :
                 self.scheduler.step()
 
+            outcome,record_dict = self.get_recorder_result_dict(recorder)
+            print(record_dict)
 
 
         if run_epoch % valid_epoch  != 0:
-            outcome=recorder.get_dict(concat=['pred','label'])
-            evaluate_dict = self.evaluation_metrics(outcome['pred'],outcome['label'])
-            avg_loss_dict=recorder.get_avg(loss_dict.keys())
-            record_dict={**evaluate_dict,**avg_loss_dict}
+            outcome,record_dict = self.run_dataloader(dataloader,update=False,display_progress=False,display_result=True)
             record_dict['epoch']=run_epoch
+
             if logger:
                 logger[logger_tag](**record_dict)
 
             evaluation_function()
-            self.print_record_dict(record_dict,logger_tag)
 
         return outcome,record_dict
 
@@ -284,13 +310,13 @@ class Model_Instance():
         self.model.train(False)
         return self.forward(data).to(torch.device('cpu'))
 
-    def inferance_dataloader(self,dataloader):
+    def inference_dataloader(self,dataloader):
         reocord = Recorder()
         trange = tqdm(dataloader,total=len(dataloader))
-        for data in dataloader :
+        for data in trange :
             pred= self.inference(data)
             reocord(pred=pred)
-            trange.update()
+
         return reocord.get_dict(concat=['pred'])
 
 #===================== Save and Load ============================
