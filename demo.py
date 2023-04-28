@@ -71,7 +71,7 @@ config['valid_step']=50000
 config['lr']=1e-3
 config['batch_size']=512
 config['device']= torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-config.amp=False
+config['amp']=False
 print(config['device'])
 
 trainloader,testloader = get_dataloader(config.batch_size)

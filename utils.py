@@ -6,7 +6,6 @@ import random
 import numpy as np
 import pandas as pd
 import os
-from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score
 
 class Recorder(dict):
     '''
@@ -83,6 +82,8 @@ def setSeed(seed=31,tor=True,tensorf=False):
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         #torch.backends.cudnn.deterministic = True
+        os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+        torch.use_deterministic_algorithms(True, warn_only=True)
 
 def move_to(obj,**kwargs):
     '''
@@ -102,31 +103,8 @@ def move_to(obj,**kwargs):
             res.append(move_to(v, **kwargs))
         return res
 
+def print_model_params(model):
+    for name, param in model.named_parameters():
+        print(name, param.min().item(), param.max().item(), param.mean().item())
+    return
 
-def calculate_metrics(metrics_name ):#List
-    '''
-    return a function that contain multiple
-    function input:
-        function(pred,label)
-    function return:
-        dict{metric1:value1, metric2:value2 ...}
-    '''
-    if not isinstance(metrics_name,list):
-        metrics_name=[metrics_name]
-
-    def preprocess_pred_format(pred):
-        if len(pred.shape)==1:
-            return pred>=0.5
-        else:
-            return pred.argmax(axis=1)
-
-    metrics_functions={}
-    metrics_functions['acc']=lambda pred,label: accuracy_score(label,preprocess_pred_format(pred))
-    metrics_functions['f1_score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
-    metrics_functions['f1score']=lambda pred,label: f1_score(label,preprocess_pred_format(pred), average='macro')
-    metrics_functions['recall']=lambda pred,label: recall_score(label,preprocess_pred_format(pred), average='macro')
-    metrics_functions['precision']=lambda pred,label: precision_score(label,preprocess_pred_format(pred), average='macro')
-    metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred if len(pred.shape) == 1 else pred[:,1])
-    if not set(metrics_name).issubset(set(metrics_functions.keys())):
-        raise Exception(f'{set(metrics_name) - set(metrics_functions.keys())} metrics not support')
-    return lambda pred,label: {name:metrics_functions[name](pred,label)for name in metrics_name}

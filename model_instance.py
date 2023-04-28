@@ -341,14 +341,6 @@ class Model_Instance():
         pass
 
 
-class Ensemble_Instance():
-    def __init__(self,
-                 ensemble_model=LogisticRegression,
-                 model_list=[],
-                 ):
-        self.ensemble_model = ensemble_model
-        self.model_list = model_list
 
-    def run_dataloader(self,dataloader):
-        pass
+
 
