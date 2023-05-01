@@ -1,6 +1,6 @@
 
 import numpy as np
-from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score
+from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score, mean_squared_error
 
 
 def calculate_metrics(metrics_name ):#List
@@ -15,9 +15,9 @@ def calculate_metrics(metrics_name ):#List
         metrics_name=[metrics_name]
 
     def preprocess_pred_format(pred):
+        pred=np.array(pred)
         if len(pred.shape)==1:
             if np.max(pred)>1:
-                print(pred)
                 return pred
             return pred>=0.5
         else:
