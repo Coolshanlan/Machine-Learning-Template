@@ -1,6 +1,6 @@
 
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor, AdaBoostClassifier
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, RepeatedStratifiedKFold
 from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score, mean_squared_error
 from sklearn.linear_model import LinearRegression, BayesianRidge, LassoLars, SGDRegressor, SGDOneClassSVM, PassiveAggressiveRegressor, PassiveAggressiveClassifier, TweedieRegressor,MultiTaskElasticNet,HuberRegressor, QuantileRegressor, TheilSenRegressor
 from sklearn.linear_model import LogisticRegression, RidgeClassifier
@@ -25,6 +25,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
 from collections import Counter
+from .utils import K_Fold_Creator
 warnings.filterwarnings('ignore')
 import copy
 
@@ -65,6 +66,9 @@ class Ensemble_Model():
     if ensemble_fn:
       self.ensemble_func= ensemble_fn
 
+  @property
+  def num_models(self):
+    return len(list(self.model_list.keys()))
 
   def ensemble_func(self,model_preds):
     raise ImportError('Not implement ensemble funct')
@@ -82,16 +86,35 @@ class Ensemble_Model():
     model_preds = self.transform_dict_preds(model_dict_preds)
     return model_preds, model_dict_preds
 
+  def model_predicts_proba(self,data):
+    model_dict_preds={}
+    for model_name, model in self.model_list.items():
+      pred = model.predict_proba(data)
+      model_dict_preds[model_name]=pred
+    model_preds = self.transform_dict_preds_proba(model_dict_preds)
+    return model_preds, model_dict_preds
+
   def predict(self,data):
     model_preds, _=self.model_predicts(data)
+    return self.ensemble_func(model_preds)
+
+  def predict_proba(self,data):
+    model_preds, _=self.model_predicts_proba(data)
     return self.ensemble_func(model_preds)
 
   def predict_detail(self,data):
     model_preds, model_dict_preds=self.model_predicts(data)
     return self.ensemble_func(model_preds), model_dict_preds
 
+  def predict_proba_detail(self,data):
+    model_preds, model_dict_preds=self.model_predicts(data)
+    return self.ensemble_func(model_preds), model_dict_preds
+
   def transform_dict_preds(self,preds):
     return np.array(list(preds.values())).T
+
+  def transform_dict_preds_proba(self,preds):
+    return np.hstack(np.array(list(preds.values())))
 
   def __len__(self):
     return len(self.model_list.keys())
@@ -100,7 +123,7 @@ class Ensemble_Model():
     for model_name, eval_metric in eval_dict.items():
       print('{}: {}'.format(model_name,eval_metric))
 
-  def evaluation(self,data, label, evaluation_fn, verbose=True):
+  def evaluate(self,data, label, evaluation_fn, verbose=True):
     ensemble_pred, model_dict_preds = self.predict_detail(data)
 
     eval_dict={}
@@ -119,7 +142,7 @@ class Ensemble_Model():
             'model_predict':model_dict_preds,
             'eval_outcome':eval_dict}
 
-  def cross_validation_evaluate(self,data, label, evaluation_fn, fold=5, verbose=True):
+  def cross_validation_evaluate(self,data, label, evaluation_fn, splits=5,repeats=1, verbose=True):
     '''
     evaluation_fn
     '''
@@ -138,28 +161,28 @@ class Ensemble_Model():
 
     record_df = pd.DataFrame()
     cv_models = []
-    skf = StratifiedKFold(n_splits=fold)
+    kfc = K_Fold_Creator(data, label, splits=splits, repeats=repeats)
     eval_columns=None
 
-    for i, (train_index, test_index) in enumerate(skf.split(data, label)):
+    for i,(cv_training_data, cv_training_label, cv_validation_data, cv_validation_label) in enumerate(kfc.get_split()):
 
       model = copy.deepcopy(self)
-      cv_training_data = data[train_index]
-      cv_training_label = label[train_index]
-      cv_validation_data = data[test_index]
-      cv_validation_label = label[test_index]
 
       model.fit(cv_training_data,cv_training_label)
-      ensemble_pred, model_dict_preds, eval_dict = model.evaluation(cv_validation_data, cv_validation_label ,evaluation_fn,verbose=False).values()
+
+      ensemble_pred, model_dict_preds, eval_dict = model.evaluate(cv_validation_data, cv_validation_label ,evaluation_fn,verbose=False).values()
       row_df = convert_to_dataframe(eval_dict)
+
       if eval_columns is None:
         eval_columns=row_df.columns[:-1].to_list()
       if verbose:
         print(f'\n\n====== CV:{i} ======')
         print(row_df.sort_values(by=eval_columns))
+
       row_df['fold'] = i
       record_df = pd.concat([record_df,row_df])
       cv_models.append(model)
+
     record_df = record_df.reset_index(drop=True)
     print(f'\n====== CV Mean ======')
     print(record_df.groupby(['model']).mean().drop(columns=['fold']).sort_values(eval_columns))
@@ -176,12 +199,12 @@ class Stack_Ensemble_Model(Ensemble_Model):
     super().__init__(model_list)
 
   def fit(self, data, label):
-    data_split_length=int(len(label)*self.stack_training_split)
-    stack_model_data, stack_model_label = data[:data_split_length], label[:data_split_length]
-    model_data, model_label = data[data_split_length:], label[data_split_length:]
+    splits = int(1/self.stack_training_split)
+    model_data, model_label, stack_model_data, stack_model_label = K_Fold_Creator(data,label,splits=splits).get_data(fold=0)
     super().fit(model_data,model_label)
     model_preds, model_dict_preds=self.model_predicts(stack_model_data)
     self.stack_model.fit(model_preds,stack_model_label)
+
 
   def ensemble_func(self,model_preds):
     return self.stack_model.predict(model_preds)
@@ -199,6 +222,59 @@ class Vote_Ensemble_Model(Ensemble_Model):
 
   def ensemble_func(self, model_preds):
     return [ Counter(pred).most_common(1)[0][0] for pred  in model_preds]
+
+class Ensemble_Proba_Model(Ensemble_Model):
+
+  def predict(self, data):
+    return self.predict_proba(data)
+
+  def evaluate(self,data, label, evaluation_fn, verbose=True):
+    ensemble_pred, model_dict_preds = self.model_predicts(data)
+
+    eval_dict={}
+
+    for model_name, pred in model_dict_preds.items():
+      eval_metric = evaluation_fn(pred,label)
+      eval_dict[model_name]=eval_metric
+
+    ensemble_pred = self.predict_proba(data)
+    eval_metric = evaluation_fn(ensemble_pred,label)
+    eval_dict['Ensemble']=eval_metric
+
+    if verbose:
+      self.print_eval(eval_dict)
+
+    return {'ensmeble_pred':ensemble_pred,
+            'model_predict':model_dict_preds,
+            'eval_outcome':eval_dict}
+
+class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
+  """
+  overwrite: ensemble_func and fit
+  """
+  def __init__(self, model_list,stack_model = LinearRegression(),stack_training_split=0.2) -> None:
+    self.stack_model = stack_model
+    self.stack_training_split = stack_training_split
+    super().__init__(model_list)
+
+  def fit(self, data, label):
+    splits = int(1/self.stack_training_split)
+    model_data, model_label, stack_model_data, stack_model_label = K_Fold_Creator(data,label,splits=splits).get_data(fold=0)
+    super().fit(model_data,model_label)
+    model_preds, model_dict_preds=self.model_predicts_proba(stack_model_data)
+    self.stack_model.fit(model_preds,stack_model_label)
+
+  def ensemble_func(self,model_preds):
+    return self.stack_model.predict(model_preds)
+
+class Mean_Ensemble_Proba_Model(Ensemble_Proba_Model):
+  def __init__(self, model_list):
+    super().__init__(model_list)
+
+  def ensemble_func(self, model_preds):
+    model_preds = model_preds.reshape((model_preds.shape[0],self.num_models,-1))
+    return np.mean(model_preds,axis=-2).argmax(axis=1)
+
 
 
 def regression_model():

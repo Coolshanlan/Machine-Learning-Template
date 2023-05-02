@@ -6,6 +6,7 @@ import random
 import numpy as np
 import pandas as pd
 import os
+from sklearn.model_selection import RepeatedStratifiedKFold
 
 class Recorder(dict):
     '''
@@ -108,3 +109,33 @@ def print_model_params(model):
         print(name, param.min().item(), param.max().item(), param.mean().item())
     return
 
+
+class K_Fold_Creator():
+    def __init__(self,data,label,splits, repeats=1) -> None:
+        self.fold_index = []
+        self.data = data
+        self.splits = splits
+        self.repeats = repeats
+        self.label = label
+        self.skf = RepeatedStratifiedKFold(n_splits=splits,n_repeats=repeats)
+        self._get_fold_index()
+
+    def _get_fold_index(self):
+        for (train_index, test_index) in self.skf.split(self.data,self.label):
+            self.fold_index.append((train_index, test_index))
+
+
+    def get_data(self,fold=0):
+        (train_index, test_index) = self.fold_index[fold]
+        train_data, train_label = self.data[train_index], self.label[train_index]
+        test_data, test_label = self.data[test_index], self.label[test_index]
+        return train_data, train_label, test_data, test_label
+
+    def get_split(self):
+        for i_fold in range(self.num_split):
+            yield self.get_data(i_fold)
+
+
+    @property
+    def num_split(self):
+        return self.splits * self.repeats
