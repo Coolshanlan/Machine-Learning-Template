@@ -303,17 +303,17 @@ def regression_model():
 
   model_dict = {'RF_3':RandomForestRegressor(n_estimators=310,max_depth=3),
               'RF_depth_None':RandomForestRegressor(n_estimators=310),
-              'XGB_31_3':XGBRegressor(n_estimators=31,max_depth=3),\
-              'XGB_310_3':XGBRegressor(n_estimators=31,max_depth=3),\
-              'XGB_31':XGBRegressor(n_estimators=31),\
-              'XGB_310':XGBRegressor(n_estimators=310),\
+              'XGB_31_3':XGBRegressor(n_estimators=31,max_depth=3),
+              'XGB_310_3':XGBRegressor(n_estimators=31,max_depth=3),
+              'XGB_31':XGBRegressor(n_estimators=31),
+              'XGB_310':XGBRegressor(n_estimators=310),
               'Bayesian':BayesianRidge(),
               'GP_Reg':gpr,
               'Huber_Reg':HuberRegressor(),
               'SVM':SVR(),
               'SVM_lin':SVR(kernel='linear'),
               'SVM_poly':SVR(kernel='poly'),
-              'SVM_0.2':SVR(C=0.2\),
+              'SVM_0.2':SVR(C=0.2),
               'SVM_0.2_lin':SVR(C=0.2,kernel='linear'),
               'SVM_0.2_poly':SVR(C=0.2,kernel='poly'),
               'SVM_5':SVR(C=5),
