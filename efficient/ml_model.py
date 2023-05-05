@@ -193,7 +193,7 @@ class Stack_Ensemble_Model(Ensemble_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_list,stack_model = LinearRegression(),stack_training_split=0.2) -> None:
+  def __init__(self, model_list,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.2) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
     super().__init__(model_list)
@@ -252,7 +252,7 @@ class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_list,stack_model = LinearRegression(),stack_training_split=0.2) -> None:
+  def __init__(self, model_list,stack_model = SVR(C=0.1,probability=True),stack_training_split=0.2) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
     super().__init__(model_list)
@@ -355,15 +355,15 @@ def classification_model():
               'Bayesian':BayesianRidge(),
               'GP_Cls':gpr,
               'RC_Cls':RidgeClassifier(),
-              'SVM':SVC(),
-              'SVM_lin':SVC(kernel='linear'),
-              'SVM_rbf':SVC(kernel='rbf'),
-              'SVM_0.2':SVC(C=0.2),
-              'SVM_0.2_lin':SVC(C=0.2,kernel='linear'),
-              'SVM_0.2_poly':SVC(C=0.2,kernel='poly'),
-              'SVM_5':SVC(C=5),
-              'SVM_5_lin':SVC(C=5,kernel='linear'),
-              'SVM_5_poly':SVC(C=5,kernel='poly'),
+              'SVM':SVC(probability=True),
+              'SVM_lin':SVC(kernel='linear',probability=True),
+              'SVM_poly':SVC(kernel='poly',probability=True),
+              'SVM_0.2':SVC(C=0.2,probability=True),
+              'SVM_0.2_lin':SVC(C=0.2,kernel='linear',probability=True),
+              'SVM_0.2_poly':SVC(C=0.2,kernel='poly',probability=True),
+              'SVM_5':SVC(C=5,probability=True),
+              'SVM_5_lin':SVC(C=5,kernel='linear',probability=True),
+              'SVM_5_poly':SVC(C=5,kernel='poly',probability=True),
               'KR':KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5),
               'KNN_Cls':KNeighborsClassifier(),
               'LGB_Cls':model_lgb,
