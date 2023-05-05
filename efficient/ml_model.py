@@ -292,12 +292,24 @@ def regression_model():
   reg = make_pipeline(StandardScaler(),
                         SGDRegressor(max_iter=500, tol=5e-4))
 
-  model_list = {'RF_Reg':RandomForestRegressor(n_estimators=310,max_depth=3),
-              'XGB_Reg':XGBRegressor(n_estimators=31,max_depth=2),\
+  model_list = {'RF_3':RandomForestRegressor(n_estimators=310,max_depth=3),
+              'RF_depth_None':RandomForestRegressor(n_estimators=310),
+              'XGB_31_3':XGBRegressor(n_estimators=31,max_depth=3),\
+              'XGB_310_3':XGBRegressor(n_estimators=31,max_depth=3),\
+              'XGB_31':XGBRegressor(n_estimators=31),\
+              'XGB_310':XGBRegressor(n_estimators=310),\
               'Bayesian':BayesianRidge(),
               'GP_Reg':gpr,
               'Huber_Reg':HuberRegressor(),
-              'SVM_Reg':SVR(),
+              'SVM':SVR(),
+              'SVM_lin':SVR(kernel='linear'),
+              'SVM_rbf':SVR(kernel='rbf'),
+              'SVM_0.2':SVR(C=0.2),
+              'SVM_0.2_lin':SVR(C=0.2,kernel='linear'),
+              'SVM_0.2_poly':SVR(C=0.2,kernel='poly'),
+              'SVM_5':SVR(C=5),
+              'SVM_5_lin':SVR(C=5,kernel='linear'),
+              'SVM_5_poly':SVR(C=5,kernel='poly'),
               'LR':LinearRegression(),
               'KR':KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5),
               'KNN_Reg':KNeighborsRegressor(),
@@ -333,14 +345,25 @@ def classification_model():
   reg = make_pipeline(StandardScaler(),
                         SGDOneClassSVM(max_iter=500, tol=5e-4))
 
-  model_list = {'RF_Cls':RandomForestClassifier(n_estimators=310,max_depth=3),
-              'XGB_Cls':XGBClassifier(n_estimators=31,max_depth=2),\
+  model_list = {
+              'RF_3':RandomForestClassifier(n_estimators=310,max_depth=3),
+              'RF_depth_None':RandomForestClassifier(n_estimators=310),
+              'XGB_31_3':XGBClassifier(n_estimators=31,max_depth=3),
+              'XGB_310_3':XGBClassifier(n_estimators=31,max_depth=3),
+              'XGB_31':XGBClassifier(n_estimators=31),
+              'XGB_310':XGBClassifier(n_estimators=310),
               'Bayesian':BayesianRidge(),
               'GP_Cls':gpr,
               'RC_Cls':RidgeClassifier(),
-              'SVM_Cls':SVC(),
-              'SVM_Cls':SVC(kernel='linear'),
-              'SVM_Cls':SVC(kernel='rbf'),
+              'SVM':SVC(),
+              'SVM_lin':SVC(kernel='linear'),
+              'SVM_rbf':SVC(kernel='rbf'),
+              'SVM_0.2':SVC(C=0.2),
+              'SVM_0.2_lin':SVC(C=0.2,kernel='linear'),
+              'SVM_0.2_poly':SVC(C=0.2,kernel='poly'),
+              'SVM_5':SVC(C=5),
+              'SVM_5_lin':SVC(C=5,kernel='linear'),
+              'SVM_5_poly':SVC(C=5,kernel='poly'),
               'KR':KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5),
               'KNN_Cls':KNeighborsClassifier(),
               'LGB_Cls':model_lgb,
