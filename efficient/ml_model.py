@@ -389,7 +389,9 @@ def plot_feature_importance(model,columns_name):
 
   plt.xlabel('FEATURE IMPORTANCE')
   plt.ylabel('FEATURE NAMES')
-
+  plt.show()
+  
+  return  fi_df
 
 ''' DEMO
 reg_model = get_reg_ensemble_model()
