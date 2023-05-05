@@ -132,8 +132,8 @@ class KFold_Sampler():
         return train_data, train_label, test_data, test_label
 
     def get_multi_fold_data(self,n_fold=1):
-        test_index_list = np.concatenate([ self.fold_index[i][1] for i in range(n_fold)])
-        train_index_list = list(set(list(range(len(self.label))))-set(test_index_list))
+        train_index_list = np.concatenate([ self.fold_index[i][1] for i in range(n_fold)])
+        test_index_list = list(set(list(range(len(self.label))))-set(train_index_list))
         train_data, train_label = self.data[train_index_list], self.label[train_index_list]
         test_data, test_label = self.data[test_index_list], self.label[test_index_list]
         return train_data, train_label, test_data, test_label
