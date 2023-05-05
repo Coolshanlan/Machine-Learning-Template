@@ -71,7 +71,7 @@ class Ensemble_Model():
     return len(list(self.model_list.keys()))
 
   def ensemble_func(self,model_preds):
-    raise ImportError('Not implement ensemble funct')
+    return model_preds
 
   def fit(self,data,label):
     for model_name, model in self.model_list.items():
