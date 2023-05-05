@@ -57,30 +57,30 @@ class Ensemble_Model():
   def __init__(self,models, ensemble_fn=None) -> None:
 
     if isinstance(models,list):
-      self.model_list={}
+      self.model_dict={}
       for midx, model in enumerate(models):
-        self.model_list[f'model_{midx+1}']= model
+        self.model_dict[f'model_{midx+1}']= model
     else:
-      self.model_list = models
+      self.model_dict = models
 
     if ensemble_fn:
       self.ensemble_func= ensemble_fn
 
   @property
   def num_models(self):
-    return len(list(self.model_list.keys()))
+    return len(list(self.model_dict.keys()))
 
   def ensemble_func(self,model_preds):
     return model_preds
 
   def fit(self,data,label):
-    for model_name, model in self.model_list.items():
+    for model_name, model in self.model_dict.items():
       model.fit(data,label)
 
 
   def model_predicts(self,data):
     model_dict_preds={}
-    for model_name, model in self.model_list.items():
+    for model_name, model in self.model_dict.items():
       pred = model.predict(data)
       model_dict_preds[model_name]=pred
     model_preds = self.transform_dict_preds(model_dict_preds)
@@ -88,7 +88,7 @@ class Ensemble_Model():
 
   def model_predicts_proba(self,data):
     model_dict_preds={}
-    for model_name, model in self.model_list.items():
+    for model_name, model in self.model_dict.items():
       pred = model.predict_proba(data)
       model_dict_preds[model_name]=pred
     model_preds = self.transform_dict_preds_proba(model_dict_preds)
@@ -117,7 +117,7 @@ class Ensemble_Model():
     return np.hstack(np.array(list(preds.values())))
 
   def __len__(self):
-    return len(self.model_list.keys())
+    return len(self.model_dict.keys())
 
   def print_eval(self,eval_dict):
     for model_name, eval_metric in eval_dict.items():
@@ -193,10 +193,10 @@ class Stack_Ensemble_Model(Ensemble_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_list,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.2) -> None:
+  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.2) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
-    super().__init__(model_list)
+    super().__init__(model_dict)
 
   def fit(self, data, label):
     splits = int(1/self.stack_training_split)
@@ -210,20 +210,29 @@ class Stack_Ensemble_Model(Ensemble_Model):
     return self.stack_model.predict(model_preds)
 
 class Mean_Ensemble_Model(Ensemble_Model):
-  def __init__(self, model_list):
-    super().__init__(model_list)
+  def __init__(self, model_dict):
+    super().__init__(model_dict)
 
   def ensemble_func(self, model_preds):
     return np.mean(model_preds,axis=1)
 
 class Vote_Ensemble_Model(Ensemble_Model):
-  def __init__(self, model_list):
-    super().__init__(model_list)
+  def __init__(self, model_dict):
+    super().__init__(model_dict)
 
   def ensemble_func(self, model_preds):
     return [ Counter(pred).most_common(1)[0][0] for pred  in model_preds]
 
 class Ensemble_Proba_Model(Ensemble_Model):
+  def __init__(self, model_dict):
+    self.remove_no_prob_model()
+    super().__init__(model_dict)
+
+  def remove_no_prob_model(self):
+    for model_name, model in self.model_dict:
+      if 'predict_proba' not in model.__dir__():
+        print(f"{model_name} don't have [predict_proba] ")
+        del self.model_dict[model_name]
 
   def predict(self, data):
     return self.predict_proba(data)
@@ -252,10 +261,10 @@ class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_list,stack_model = SVR(C=0.1,probability=True),stack_training_split=0.2) -> None:
+  def __init__(self, model_dict,stack_model = SVR(C=0.1,probability=True),stack_training_split=0.2) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
-    super().__init__(model_list)
+    super().__init__(model_dict)
 
   def fit(self, data, label):
     splits = int(1/self.stack_training_split)
@@ -268,8 +277,8 @@ class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
     return self.stack_model.predict(model_preds)
 
 class Mean_Ensemble_Proba_Model(Ensemble_Proba_Model):
-  def __init__(self, model_list):
-    super().__init__(model_list)
+  def __init__(self, model_dict):
+    super().__init__(model_dict)
 
   def ensemble_func(self, model_preds):
     model_preds = model_preds.reshape((model_preds.shape[0],self.num_models,-1))
@@ -292,7 +301,7 @@ def regression_model():
   reg = make_pipeline(StandardScaler(),
                         SGDRegressor(max_iter=500, tol=5e-4))
 
-  model_list = {'RF_3':RandomForestRegressor(n_estimators=310,max_depth=3),
+  model_dict = {'RF_3':RandomForestRegressor(n_estimators=310,max_depth=3),
               'RF_depth_None':RandomForestRegressor(n_estimators=310),
               'XGB_31_3':XGBRegressor(n_estimators=31,max_depth=3),\
               'XGB_310_3':XGBRegressor(n_estimators=31,max_depth=3),\
@@ -302,14 +311,14 @@ def regression_model():
               'GP_Reg':gpr,
               'Huber_Reg':HuberRegressor(),
               'SVM':SVR(),
-              'SVM_lin':SVR(kernel='linear'),
-              'SVM_rbf':SVR(kernel='rbf'),
-              'SVM_0.2':SVR(C=0.2),
-              'SVM_0.2_lin':SVR(C=0.2,kernel='linear'),
-              'SVM_0.2_poly':SVR(C=0.2,kernel='poly'),
-              'SVM_5':SVR(C=5),
-              'SVM_5_lin':SVR(C=5,kernel='linear'),
-              'SVM_5_poly':SVR(C=5,kernel='poly'),
+              'SVM_lin':SVR(kernel='linear',probability=True),
+              'SVM_poly':SVR(kernel='poly',probability=True),
+              'SVM_0.2':SVR(C=0.2,probability=True),
+              'SVM_0.2_lin':SVR(C=0.2,kernel='linear',probability=True),
+              'SVM_0.2_poly':SVR(C=0.2,kernel='poly',probability=True),
+              'SVM_5':SVR(C=5,probability=True),
+              'SVM_5_lin':SVR(C=5,kernel='linear',probability=True),
+              'SVM_5_poly':SVR(C=5,kernel='poly',probability=True),
               'LR':LinearRegression(),
               'KR':KernelRidge(alpha=0.6, kernel='polynomial', degree=2, coef0=2.5),
               'KNN_Reg':KNeighborsRegressor(),
@@ -318,7 +327,7 @@ def regression_model():
                             learning_rate = "constant", max_iter = 3000, random_state = 1000),
               'SGD_Reg':reg,
               }
-  stack_model_list= {
+  stack_model_dict= {
                 'SVM_Linear_Reg':SVR(kernel='linear'),
                 'Bayesian':BayesianRidge(),
                 'MLP':MLPRegressor(activation = "relu", alpha = 0.1, hidden_layer_sizes = (5,),
@@ -328,7 +337,7 @@ def regression_model():
                 'XGB_Reg':XGBRegressor(n_estimators=11,max_depth=2),
                 'RF_Reg':RandomForestRegressor(n_estimators=31,max_depth=2),
                 }
-  return model_list
+  return model_dict
 
 def classification_model():
 
@@ -345,7 +354,7 @@ def classification_model():
   reg = make_pipeline(StandardScaler(),
                         SGDOneClassSVM(max_iter=500, tol=5e-4))
 
-  model_list = {
+  model_dict = {
               'RF_3':RandomForestClassifier(n_estimators=310,max_depth=3),
               'RF_depth_None':RandomForestClassifier(n_estimators=310),
               'XGB_31_3':XGBClassifier(n_estimators=31,max_depth=3),
@@ -372,7 +381,7 @@ def classification_model():
               'SGD_Cls':reg,
               'QDA':QuadraticDiscriminantAnalysis(),
               }
-  stack_model_list= {
+  stack_model_dict= {
                 'SVM_Linear_Reg':SVC(kernel='linear'),
                 'MLP':MLPClassifier(activation = "relu", alpha = 0.1, hidden_layer_sizes = (5,),
                               learning_rate = "constant", max_iter = 1000, random_state = 1000),
@@ -380,11 +389,11 @@ def classification_model():
                 'RF_Reg':RandomForestClassifier(n_estimators=31,max_depth=2),
                 'QDA':QuadraticDiscriminantAnalysis(),
                 }
-  return model_list
+  return model_dict
 
 def get_reg_ensemble_model():
-  model_list = regression_model()
-  return Ensemble_Model(model_list=model_list,\
+  model_dict = regression_model()
+  return Ensemble_Model(model_dict=model_dict,\
                         ensemble_fn=lambda model_preds: \
                           np.mean(np.array(model_preds),axis=1)\
                         )
@@ -413,12 +422,12 @@ def plot_feature_importance(model,columns_name):
   plt.xlabel('FEATURE IMPORTANCE')
   plt.ylabel('FEATURE NAMES')
   plt.show()
-  
+
   return  fi_df
 
 ''' DEMO
 reg_model = get_reg_ensemble_model()
-stack_model_list= {
+stack_model_dict= {
               'SVM_Linear_Reg':SVR(kernel='linear'),
               'Bayesian':BayesianRidge(),
               'Huber_Reg':HuberRegressor(),
@@ -426,7 +435,7 @@ stack_model_list= {
               }
 
 evaluation_fn = calculate_metrics(['mse'])
-model = Stack_Ensemble_Model(model_list,stack_model=Mean_Ensemble_Model(stack_model_list))
+model = Stack_Ensemble_Model(model_dict,stack_model=Mean_Ensemble_Model(stack_model_dict))
 cv_models, cv_df = model.cross_validation_evaluate(data, label, evaluation_fn, fold=6, verbose=False)
 cv_ensemble_model = Mean_Ensemble_Model(cv_models)
 
