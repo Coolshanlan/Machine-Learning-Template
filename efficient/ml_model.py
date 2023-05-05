@@ -261,7 +261,7 @@ class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_dict,stack_model = SVR(C=0.1,probability=True),stack_training_split=0.2) -> None:
+  def __init__(self, model_dict,stack_model = SVR(C=0.1),stack_training_split=0.2) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
     super().__init__(model_dict)
