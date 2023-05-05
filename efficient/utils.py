@@ -110,14 +110,14 @@ def print_model_params(model):
     return
 
 
-class K_Fold_Creator():
-    def __init__(self,data,label,splits, repeats=1) -> None:
+class KFold_Sampler():
+    def __init__(self,data,label,n_splits,n_repeats=1) -> None:
         self.fold_index = []
-        self.data = data
-        self.splits = splits
-        self.repeats = repeats
-        self.label = label
-        self.skf = RepeatedStratifiedKFold(n_splits=splits,n_repeats=repeats)
+        self.data = np.array(data)
+        self.label = np.array(label)
+        self.n_splits = n_splits
+        self.n_repeats = n_repeats
+        self.skf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats)
         self._get_fold_index()
 
     def _get_fold_index(self):
@@ -131,11 +131,19 @@ class K_Fold_Creator():
         test_data, test_label = self.data[test_index], self.label[test_index]
         return train_data, train_label, test_data, test_label
 
-    def get_split(self):
+    def get_multi_fold_data(self,n_fold=1):
+        test_index_list = np.concatenate([ self.fold_index[i][1] for i in range(n_fold)])
+        train_index_list = list(set(list(range(len(self.label))))-set(test_index_list))
+        train_data, train_label = self.data[train_index_list], self.label[train_index_list]
+        test_data, test_label = self.data[test_index_list], self.label[test_index_list]
+        return train_data, train_label, test_data, test_label
+
+
+
+    def splits(self):
         for i_fold in range(self.num_split):
             yield self.get_data(i_fold)
 
-
     @property
-    def num_split(self):
-        return self.splits * self.repeats
+    def total_split(self):
+        return self.n_splits * self.repeats

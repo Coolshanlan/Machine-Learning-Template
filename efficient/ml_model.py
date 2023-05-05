@@ -231,7 +231,7 @@ class Ensemble_Proba_Model(Ensemble_Model):
   def remove_no_prob_model(self):
     for model_name, model in self.model_dict:
       if 'predict_proba' not in model.__dir__():
-        print(f"{model_name} don't have [predict_proba] ")
+        print(f"{model_name} don't have [predict_proba]")
         del self.model_dict[model_name]
 
   def predict(self, data):
@@ -391,12 +391,6 @@ def classification_model():
                 }
   return model_dict
 
-def get_reg_ensemble_model():
-  model_dict = regression_model()
-  return Ensemble_Model(model_dict=model_dict,\
-                        ensemble_fn=lambda model_preds: \
-                          np.mean(np.array(model_preds),axis=1)\
-                        )
 
 
 def plot_feature_importance(model,columns_name):

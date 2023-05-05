@@ -1,6 +1,6 @@
 
 import numpy as np
-from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score, mean_squared_error
+from sklearn.metrics import accuracy_score,precision_recall_fscore_support, roc_auc_score, f1_score, recall_score, precision_score, mean_squared_error, mean_absolute_error
 
 
 def calculate_metrics(metrics_name ):#List
@@ -31,6 +31,7 @@ def calculate_metrics(metrics_name ):#List
     metrics_functions['precision']=lambda pred,label: precision_score(label,preprocess_pred_format(pred), average='macro')
     metrics_functions['auroc']=lambda pred,label: roc_auc_score(label,pred if len(pred.shape) == 1 else pred[:,1])
     metrics_functions['mse']=lambda pred,label: mean_squared_error(label,pred)
+    metrics_functions['mae']=lambda pred,label: mean_absolute_error(label,pred)
 
     if not set(metrics_name).issubset(set(metrics_functions.keys())):
         raise Exception(f'{set(metrics_name) - set(metrics_functions.keys())} metrics not support.\nNow only support {list(metrics_functions.keys())}')
