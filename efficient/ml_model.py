@@ -25,7 +25,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
 from collections import Counter
-from .utils import K_Fold_Creator
+from .utils import KFold_Sampler
 warnings.filterwarnings('ignore')
 import copy
 
@@ -161,10 +161,10 @@ class Ensemble_Model():
 
     record_df = pd.DataFrame()
     cv_models = []
-    kfc = K_Fold_Creator(data, label, splits=splits, repeats=repeats)
+    kfc = KFold_Sampler(data, label, n_splits=splits, n_repeats=repeats)
     eval_columns=None
 
-    for i,(cv_training_data, cv_training_label, cv_validation_data, cv_validation_label) in enumerate(kfc.get_split()):
+    for i,(cv_training_data, cv_training_label, cv_validation_data, cv_validation_label) in enumerate(kfc.splits()):
 
       model = copy.deepcopy(self)
 
@@ -199,8 +199,8 @@ class Stack_Ensemble_Model(Ensemble_Model):
     super().__init__(model_dict)
 
   def fit(self, data, label):
-    splits = int(1/self.stack_training_split)
-    model_data, model_label, stack_model_data, stack_model_label = K_Fold_Creator(data,label,splits=splits).get_data(fold=0)
+    splits = int(self.stack_training_split*100)
+    stack_model_data, stack_model_label, model_data, model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=splits)
     super().fit(model_data,model_label)
     model_preds, model_dict_preds=self.model_predicts(stack_model_data)
     self.stack_model.fit(model_preds,stack_model_label)
