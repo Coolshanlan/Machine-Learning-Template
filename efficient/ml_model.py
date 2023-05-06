@@ -225,8 +225,8 @@ class Vote_Ensemble_Model(Ensemble_Model):
 
 class Ensemble_Proba_Model(Ensemble_Model):
   def __init__(self, model_dict):
-    self.remove_no_prob_model()
     super().__init__(model_dict)
+    self.remove_no_prob_model()
 
   def remove_no_prob_model(self):
     for model_name, model in self.model_dict:
