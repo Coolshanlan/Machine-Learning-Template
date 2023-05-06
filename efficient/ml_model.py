@@ -229,11 +229,13 @@ class Ensemble_Proba_Model(Ensemble_Model):
     self.remove_no_prob_model()
 
   def remove_no_prob_model(self):
+    model_dict_tmp = copy.deepcopy(self.model_dict)
     for model_name, model in self.model_dict.items():
       if 'predict_proba' not in model.__dir__():
         print(f"{model_name} don't have [predict_proba]")
-        del self.model_dict[model_name]
-
+        del model_dict_tmp[model_name]
+    self.model_dict = model_dict_tmp
+    
   def predict(self, data):
     return self.predict_proba(data)
 
@@ -308,7 +310,7 @@ def regression_model():
               'XGB_31':XGBRegressor(n_estimators=31),
               'XGB_310':XGBRegressor(n_estimators=310),
               'Bayesian':BayesianRidge(),
-              'GP_Reg':gpr,
+              #'GP_Reg':gpr,
               'Huber_Reg':HuberRegressor(),
               'SVM':SVR(),
               'SVM_lin':SVR(kernel='linear'),
