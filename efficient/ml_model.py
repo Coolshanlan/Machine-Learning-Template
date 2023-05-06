@@ -142,7 +142,7 @@ class Ensemble_Model():
             'model_predict':model_dict_preds,
             'eval_outcome':eval_dict}
 
-  def cross_validation_evaluate(self,data, label, evaluation_fn, splits=5,repeats=1, verbose=True):
+  def cross_validation_evaluate(self,data, label, evaluation_fn, n_splits=5,n_repeats=1, verbose=True):
     '''
     evaluation_fn
     '''
@@ -161,7 +161,7 @@ class Ensemble_Model():
 
     record_df = pd.DataFrame()
     cv_models = []
-    kfc = KFold_Sampler(data, label, n_splits=splits, n_repeats=repeats)
+    kfc = KFold_Sampler(data, label, n_splits=n_splits, n_repeats=n_repeats)
     eval_columns=None
 
     for i,(cv_training_data, cv_training_label, cv_validation_data, cv_validation_label) in enumerate(kfc.splits()):
@@ -235,7 +235,7 @@ class Ensemble_Proba_Model(Ensemble_Model):
         print(f"{model_name} don't have [predict_proba]")
         del model_dict_tmp[model_name]
     self.model_dict = model_dict_tmp
-    
+
   def predict(self, data):
     return self.predict_proba(data)
 
@@ -269,8 +269,8 @@ class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
     super().__init__(model_dict)
 
   def fit(self, data, label):
-    splits = int(1/self.stack_training_split)
-    model_data, model_label, stack_model_data, stack_model_label = K_Fold_Creator(data,label,splits=splits).get_data(fold=0)
+    n_splits = int(self.stack_training_split*100)
+    model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=n_splits)
     super().fit(model_data,model_label)
     model_preds, model_dict_preds=self.model_predicts_proba(stack_model_data)
     self.stack_model.fit(model_preds,stack_model_label)
