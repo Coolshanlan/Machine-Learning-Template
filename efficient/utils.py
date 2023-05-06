@@ -146,4 +146,4 @@ class KFold_Sampler():
 
     @property
     def total_split(self):
-        return self.n_splits * self.repeats
+        return self.n_splits * self.n_repeats
