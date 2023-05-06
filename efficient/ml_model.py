@@ -229,7 +229,7 @@ class Ensemble_Proba_Model(Ensemble_Model):
     self.remove_no_prob_model()
 
   def remove_no_prob_model(self):
-    for model_name, model in self.model_dict:
+    for model_name, model in self.model_dict.items():
       if 'predict_proba' not in model.__dir__():
         print(f"{model_name} don't have [predict_proba]")
         del self.model_dict[model_name]
