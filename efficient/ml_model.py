@@ -26,11 +26,28 @@ import matplotlib.pyplot as plt
 import warnings
 from collections import Counter
 from .utils import KFold_Sampler
+from tqdm import tqdm
 warnings.filterwarnings('ignore')
 import copy
+## TODO
+"""
+weighted sum and NN weighted sum
+"""
 
+def eval_dict_to_dataframe(eval_dict):
+    record_df=pd.DataFrame()
+    for model_name, eval_metrics in eval_dict.items():
+      if not isinstance(eval_metrics, dict):
+        eval_metrics = {'eval_metric': eval_metrics}
+      row_df = pd.DataFrame(eval_metrics,index=[0])
+      row_df['model'] = model_name
+      record_df = pd.concat([record_df,row_df])
+    record_df=record_df.sort_values(by=record_df.columns[:-1].to_list())
+    record_df= record_df.reset_index(drop=True)
+    record_df = record_df[['model']+record_df.columns[:-1].to_list()]
+    return record_df
 
-class Ensemble_Model():
+class MLModels():
   """
   predict output:
   (ensemble_pred, model_pred_dict)
@@ -54,39 +71,43 @@ class Ensemble_Model():
   predict -> evaluation_func
   return ensemble_predict, model_dict_predict, eval_dict
   """
-  def __init__(self,models, ensemble_fn=None) -> None:
+  def __init__(self,models) -> None:
 
     if isinstance(models,list):
       self.model_dict={}
       for midx, model in enumerate(models):
         self.model_dict[f'model_{midx+1}']= model
+    elif not isinstance(models,dict):
+      self.model_dict={}
+      self.model_dict[f'model_{1}']= models
     else:
       self.model_dict = models
 
-    if ensemble_fn:
-      self.ensemble_func= ensemble_fn
-
-  @property
-  def num_models(self):
-    return len(list(self.model_dict.keys()))
-
-  def ensemble_func(self,model_preds):
-    return model_preds
-
   def fit(self,data,label):
-    for model_name, model in self.model_dict.items():
+    pbar = tqdm(self.model_dict.items(), total=self.num_models, leave=False, bar_format='{desc:<30}\t{percentage:2.0f}%|{bar:10}{r_bar}')
+    for model_name, model in pbar:
+      pbar.set_description(f'{model_name} Training...')
       model.fit(data,label)
 
+  def predicts(self,data):
+    return self.model_predicts(data)
 
-  def model_predicts(self,data):
+  def predicts_proba(self,data):
+    return self.model_predicts_proba(data)
+
+  def _model_predicts(self,data):
     model_dict_preds={}
     for model_name, model in self.model_dict.items():
       pred = model.predict(data)
       model_dict_preds[model_name]=pred
+
     model_preds = self.transform_dict_preds(model_dict_preds)
     return model_preds, model_dict_preds
 
-  def model_predicts_proba(self,data):
+  def model_predicts(self,data):
+    return self._model_predicts(data)
+
+  def _model_predicts_proba(self,data):
     model_dict_preds={}
     for model_name, model in self.model_dict.items():
       pred = model.predict_proba(data)
@@ -94,37 +115,19 @@ class Ensemble_Model():
     model_preds = self.transform_dict_preds_proba(model_dict_preds)
     return model_preds, model_dict_preds
 
-  def predict(self,data):
-    model_preds, _=self.model_predicts(data)
-    return self.ensemble_func(model_preds)
-
-  def predict_proba(self,data):
-    model_preds, _=self.model_predicts_proba(data)
-    return self.ensemble_func(model_preds)
-
-  def predict_detail(self,data):
-    model_preds, model_dict_preds=self.model_predicts(data)
-    return self.ensemble_func(model_preds), model_dict_preds
-
-  def predict_proba_detail(self,data):
-    model_preds, model_dict_preds=self.model_predicts(data)
-    return self.ensemble_func(model_preds), model_dict_preds
+  def model_predicts_proba(self,data):
+    return self._model_predicts_proba(data)
 
   def transform_dict_preds(self,preds):
-    return np.array(list(preds.values())).T
+    return np.array(list(preds.values())).T #(num_data, num_model)
 
   def transform_dict_preds_proba(self,preds):
-    return np.hstack(np.array(list(preds.values())))
-
-  def __len__(self):
-    return len(self.model_dict.keys())
-
-  def print_eval(self,eval_dict):
-    for model_name, eval_metric in eval_dict.items():
-      print('{}: {}'.format(model_name,eval_metric))
+    outcome=np.hstack(np.array(list(preds.values())))# (num_data, num_model*classes)
+    outcome=outcome.reshape((-1,self.num_models,np.array(list(preds.values())).shape[-1]))
+    return outcome #(num_data, num_model, classes)
 
   def evaluate(self,data, label, evaluation_fn, verbose=True):
-    ensemble_pred, model_dict_preds = self.predict_detail(data)
+    _, model_dict_preds = self.model_predicts(data)
 
     eval_dict={}
 
@@ -132,32 +135,18 @@ class Ensemble_Model():
       eval_metric = evaluation_fn(pred,label)
       eval_dict[model_name]=eval_metric
 
-    eval_metric = evaluation_fn(ensemble_pred,label)
-    eval_dict['Ensemble']=eval_metric
-
+    eval_df = eval_dict_to_dataframe(eval_dict)
     if verbose:
-      self.print_eval(eval_dict)
+      print(eval_df)
 
-    return {'ensmeble_pred':ensemble_pred,
-            'model_predict':model_dict_preds,
-            'eval_outcome':eval_dict}
+    return {'model_predict':model_dict_preds,
+            'eval_df':eval_df}
+
 
   def cross_validation_evaluate(self,data, label, evaluation_fn, n_splits=5,n_repeats=1, verbose=True):
     '''
     evaluation_fn
     '''
-
-    def convert_to_dataframe(eval_dict):
-
-      record_df=pd.DataFrame()
-
-      for model_name, eval_metrics in eval_dict.items():
-        if not isinstance(eval_metrics, dict):
-          eval_metrics = {'eval_metric': eval_metrics}
-        row_df = pd.DataFrame(eval_metrics,index=[0])
-        row_df['model'] = model_name
-        record_df = pd.concat([record_df,row_df])
-      return record_df
 
     record_df = pd.DataFrame()
     cv_models = []
@@ -165,67 +154,50 @@ class Ensemble_Model():
     eval_columns=None
 
     for i,(cv_training_data, cv_training_label, cv_validation_data, cv_validation_label) in enumerate(kfc.splits()):
-
       model = copy.deepcopy(self)
 
       model.fit(cv_training_data,cv_training_label)
 
-      ensemble_pred, model_dict_preds, eval_dict = model.evaluate(cv_validation_data, cv_validation_label ,evaluation_fn,verbose=False).values()
-      row_df = convert_to_dataframe(eval_dict)
+      eval_dict = model.evaluate(cv_validation_data, cv_validation_label ,evaluation_fn,verbose=False)
+      eval_df = eval_dict['eval_df']
 
       if eval_columns is None:
-        eval_columns=row_df.columns[:-1].to_list()
+        eval_columns=eval_df.columns[1:].to_list()
+
       if verbose:
         print(f'\n\n====== CV:{i} ======')
-        print(row_df.sort_values(by=eval_columns))
+        print(eval_df)
 
-      row_df['fold'] = i
-      record_df = pd.concat([record_df,row_df])
+      eval_df['fold'] = i
+      record_df = pd.concat([record_df,eval_df])
       cv_models.append(model)
 
     record_df = record_df.reset_index(drop=True)
     print(f'\n====== CV Mean ======')
-    print(record_df.groupby(['model']).mean().drop(columns=['fold']).sort_values(eval_columns))
+    print(record_df.groupby(['model']).mean().drop(columns=['fold']).sort_values(eval_columns).reset_index(drop=False))
 
     return cv_models, record_df
 
-class Stack_Ensemble_Model(Ensemble_Model):
-  """
-  overwrite: ensemble_func and fit
-  """
-  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.2) -> None:
-    self.stack_model = stack_model
-    self.stack_training_split = stack_training_split
-    super().__init__(model_dict)
+  def __len__(self):
+    return len(self.model_dict.keys())
 
-  def fit(self, data, label):
-    splits = int(self.stack_training_split*100)
-    stack_model_data, stack_model_label, model_data, model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=splits)
-    super().fit(model_data,model_label)
-    model_preds, model_dict_preds=self.model_predicts(stack_model_data)
-    self.stack_model.fit(model_preds,stack_model_label)
+  @property
+  def num_models(self):
+    return len(list(self.model_dict.keys()))
 
 
-  def ensemble_func(self,model_preds):
-    return self.stack_model.predict(model_preds)
+class Ensemble_Model(MLModels):
+  def __init__(self, models, ensemble_fn=None) -> None:
+    super().__init__(models)
 
-class Mean_Ensemble_Model(Ensemble_Model):
-  def __init__(self, model_dict):
-    super().__init__(model_dict)
+    self.model_predict_fn=super()._model_predicts
+    self.proba_mode=False
+    if ensemble_fn:
+      self.ensemble_func=ensemble_fn
 
-  def ensemble_func(self, model_preds):
-    return np.mean(model_preds,axis=1)
-
-class Vote_Ensemble_Model(Ensemble_Model):
-  def __init__(self, model_dict):
-    super().__init__(model_dict)
-
-  def ensemble_func(self, model_preds):
-    return [ Counter(pred).most_common(1)[0][0] for pred  in model_preds]
-
-class Ensemble_Proba_Model(Ensemble_Model):
-  def __init__(self, model_dict):
-    super().__init__(model_dict)
+  def set_proba(self):
+    self.proba_mode=True
+    self.model_predict_fn = super()._model_predicts_proba
     self.remove_no_prob_model()
 
   def remove_no_prob_model(self):
@@ -236,56 +208,107 @@ class Ensemble_Proba_Model(Ensemble_Model):
         del model_dict_tmp[model_name]
     self.model_dict = model_dict_tmp
 
-  def predict(self, data):
-    return self.predict_proba(data)
+  def ensemble_func(self,model_pred):
+    raise NotImplementedError
 
-  def evaluate(self,data, label, evaluation_fn, verbose=True):
-    ensemble_pred, model_dict_preds = self.model_predicts(data)
+  def _proba(self,model_preds):
+    return model_preds.mean(axis=-2)
 
-    eval_dict={}
+  def predict(self,data):
+    model_preds, model_dict_pred=self.model_predicts(data)
+    return model_preds
 
-    for model_name, pred in model_dict_preds.items():
-      eval_metric = evaluation_fn(pred,label)
-      eval_dict[model_name]=eval_metric
+  def predict_proba(self,data):
+    model_preds, model_dict_pred=self.model_predicts_proba(data)
+    return model_preds
 
-    ensemble_pred = self.predict_proba(data)
-    eval_metric = evaluation_fn(ensemble_pred,label)
-    eval_dict['Ensemble']=eval_metric
+  def model_predicts(self,data):
+    model_preds, model_dict_preds=self.model_predict_fn(data)
+    if self.proba_mode:
+      for model, pred in model_dict_preds.items():
+        model_dict_preds[model] = pred.argmax(axis=-1)
+    model_dict_preds['Ensemble Model']= self.ensemble_func(model_preds)
+    return model_dict_preds['Ensemble Model'], model_dict_preds
 
-    if verbose:
-      self.print_eval(eval_dict)
+  def model_predicts_proba(self,data):
+    model_preds, model_dict_preds=super()._model_predicts_proba(data)
+    model_dict_preds['Proba Model'] = self._proba(model_preds)
+    return model_dict_preds['Proba Model'], model_dict_preds
 
-    return {'ensmeble_pred':ensemble_pred,
-            'model_predict':model_dict_preds,
-            'eval_outcome':eval_dict}
 
-class Stack_Ensemble_Proba_Model(Ensemble_Proba_Model):
+class Stack_Ensemble_Model(Ensemble_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_dict,stack_model = SVR(C=0.1),stack_training_split=0.2) -> None:
+  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.1) -> None:
     self.stack_model = stack_model
     self.stack_training_split = stack_training_split
     super().__init__(model_dict)
 
+  def stack_input_transform(self,model_preds):
+    return model_preds
+
   def fit(self, data, label):
-    n_splits = int(self.stack_training_split*100)
-    model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=n_splits)
+    split_dict={0.1:(10,1),
+                0.2:(5,1),
+                0.15:(6,1),
+                0.25:(4,1),
+                0.3:(3,1),
+                0.5:(2,1),}
+    if self.stack_training_split not in split_dict.keys():
+      model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=int(self.stack_training_split*100))
+    else:
+      model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
     super().fit(model_data,model_label)
-    model_preds, model_dict_preds=self.model_predicts_proba(stack_model_data)
+
+    model_preds, model_dict_preds=self.model_predict_fn(stack_model_data)
+    model_preds = self.stack_input_transform(model_preds)
     self.stack_model.fit(model_preds,stack_model_label)
 
   def ensemble_func(self,model_preds):
+    model_preds = self.stack_input_transform(model_preds)
     return self.stack_model.predict(model_preds)
 
-class Mean_Ensemble_Proba_Model(Ensemble_Proba_Model):
+  def predict_proba(self, data):
+    model_preds, model_dict_preds=self.model_predict_fn(data)
+    model_preds = self.stack_input_transform(model_preds)
+    return self.stack_model.predict_proba(model_preds)
+
+
+class Mean_Ensemble_Model(Ensemble_Model):
   def __init__(self, model_dict):
     super().__init__(model_dict)
 
   def ensemble_func(self, model_preds):
-    model_preds = model_preds.reshape((model_preds.shape[0],self.num_models,-1))
-    return np.mean(model_preds,axis=-2).argmax(axis=1)
+    return np.mean(model_preds,axis=1)
 
+
+class Vote_Ensemble_Model(Ensemble_Model):
+  def __init__(self, model_dict):
+    super().__init__(model_dict)
+
+  def ensemble_func(self, model_preds):
+    return [ Counter(pred).most_common(1)[0][0] for pred  in model_preds]
+
+
+class Stack_Ensemble_Proba_Model(Stack_Ensemble_Model):
+  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.1) -> None:
+    self.stack_model = stack_model
+    self.stack_training_split = stack_training_split
+    super().__init__(model_dict, self.stack_model, self.stack_training_split)
+    self.set_proba()
+
+  def stack_input_transform(self,model_preds):
+    return model_preds.reshape((model_preds.shape[0],-1))
+
+
+class Mean_Ensemble_Proba_Model(Ensemble_Model):
+  def __init__(self, model_dict):
+    super().__init__(model_dict)
+    super().set_proba()
+
+  def ensemble_func(self,model_preds):
+    return self._proba(model_preds).argmax(axis=-1)
 
 
 def regression_model():
@@ -392,8 +415,6 @@ def classification_model():
                 'QDA':QuadraticDiscriminantAnalysis(),
                 }
   return model_dict
-
-
 
 def plot_feature_importance(model,columns_name):
   importance = model.feature_importances_
