@@ -27,12 +27,17 @@ import warnings
 from collections import Counter
 from .utils import KFold_Sampler
 from tqdm import tqdm
+from .model_instance import *
+from torch import nn
+import torch.optim as optim
 warnings.filterwarnings('ignore')
 import copy
 ## TODO
 """
 weighted sum and NN weighted sum
 """
+
+
 
 def eval_dict_to_dataframe(eval_dict):
     record_df=pd.DataFrame()
@@ -72,7 +77,8 @@ class MLModels():
   return ensemble_predict, model_dict_predict, eval_dict
   """
   def __init__(self,models) -> None:
-
+    models = copy.deepcopy(models)
+    self.cv_models=None
     if isinstance(models,list):
       self.model_dict={}
       for midx, model in enumerate(models):
@@ -175,7 +181,7 @@ class MLModels():
     record_df = record_df.reset_index(drop=True)
     print(f'\n====== CV Mean ======')
     print(record_df.groupby(['model']).mean().drop(columns=['fold']).sort_values(eval_columns).reset_index(drop=False))
-
+    self.cv_models=cv_models
     return cv_models, record_df
 
   def __len__(self):
@@ -241,7 +247,7 @@ class Stack_Ensemble_Model(Ensemble_Model):
   overwrite: ensemble_func and fit
   """
   def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.1) -> None:
-    self.stack_model = stack_model
+    self.stack_model = copy.deepcopy(stack_model)
     self.stack_training_split = stack_training_split
     super().__init__(model_dict)
 
@@ -293,9 +299,7 @@ class Vote_Ensemble_Model(Ensemble_Model):
 
 class Stack_Ensemble_Proba_Model(Stack_Ensemble_Model):
   def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.1) -> None:
-    self.stack_model = stack_model
-    self.stack_training_split = stack_training_split
-    super().__init__(model_dict, self.stack_model, self.stack_training_split)
+    super().__init__(model_dict, stack_model, stack_training_split)
     self.set_proba()
 
   def stack_input_transform(self,model_preds):
@@ -309,6 +313,125 @@ class Mean_Ensemble_Proba_Model(Ensemble_Model):
 
   def ensemble_func(self,model_preds):
     return self._proba(model_preds).argmax(axis=-1)
+
+class Weighted_Model_Instance(Model_Instance):
+
+  def __init__(self,
+                model,
+                optimizer=None,
+                scheduler=None,
+                scheduler_epoch=False,
+                loss_function=None,
+                evaluation_metrics=lambda x,y : {},
+                clip_grad=None,
+                device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
+                amp=False,
+                accum_iter=1,
+                model_weight_init=None):
+      super().__init__(model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                scheduler_epoch=scheduler_epoch,
+                loss_function=loss_function,
+                evaluation_metrics=evaluation_metrics,
+                clip_grad=clip_grad,
+                device=device,
+                amp=amp,
+                accum_iter=accum_iter,
+                model_weight_init=model_weight_init)
+
+  def get_loss(self,pred,label):
+      loss_return = self.loss_function(pred,label)
+      #引入調和平均數，讓model weight 一起縮放
+      # l1_regularization = 1 * torch.norm(torch.prod(self.model.weights.data,dim=-1)/torch.sum(self.model.weights.data,dim=-1), 1)
+      l1_regularization = 1 * torch.norm(self.model.weights.data, 1)
+      loss_return += l1_regularization
+      if not isinstance(loss_return,tuple):
+          loss_return = (loss_return,{'loss':loss_return.detach().to(torch.device('cpu'))})
+      else:
+          loss,loss_dict=loss_return
+
+          # display in console
+          if 'loss' not in loss_dict.keys():
+              loss_dict['loss'] = loss
+          loss_dict = {k:loss_dict[k].detach().to(torch.device('cpu').item()) for k in loss_dict.keys()}
+          loss_return=(loss,loss_dict)
+      return loss_return
+
+
+
+class Weighted_Model(nn.Module):
+  def __init__(self,num_model,num_classes,init_mode='rand',init_value=0.1) -> None:
+    super(Weighted_Model, self).__init__()
+    self.init_mode=init_mode
+    self.num_model=num_model
+    self.num_classes=num_classes
+    self.init_value=init_value
+    if self.init_mode =='rand':
+      self.weights = nn.Parameter(torch.abs(torch.rand(num_model,num_classes))+init_value)
+    else:
+      self.weights = nn.Parameter(torch.abs(torch.ones(num_model,num_classes)))
+    self.active_fn = nn.ReLU()
+    self.softmax = nn.Softmax(dim=-1)
+    if num_classes >1:
+      self.pred_fn = nn.Softmax(dim=-1)
+    else:
+      self.pred_fn = nn.Sigmoid()
+
+  def forward(self,data):
+    self.weights.data=self.active_fn(self.weights.view(-1).data).reshape(self.num_model,self.num_classes)
+    x = self.weights.view(-1)*data#M*C
+    x = self.active_fn(x)
+    x = x.view(-1,self.num_model,self.num_classes)
+    x = x.sum(axis=1)
+    x = torch.div(x,torch.sum(self.weights.T,dim=-1))
+    x = self.pred_fn(x)
+    return x
+
+class ML_Weighted_Model():
+  def __init__(self,num_model, num_classes, lr=1e-3, epoch=500,init_mode='rand',init_value=0.1) -> None:
+    self.model = Weighted_Model(num_model,num_classes,init_mode=init_mode,init_value=init_value)
+    self.epoch=epoch
+    self.lr = lr
+    self.num_classes = num_classes
+    self.num_model = num_model
+    self.init_value=init_value
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.AdamW(self.model.parameters(),lr=self.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.epoch)
+    self.model_instance = Weighted_Model_Instance(model=self.model,
+                                    optimizer=optimizer,
+                                    loss_function=criterion,
+                                    scheduler=scheduler,
+                                    scheduler_epoch=False,
+                                    device='cpu',
+                                    #clip_grad=1,
+                                    amp=False,
+                                    )#model_weight_init='normal')
+
+  def predict(self,data):
+    data = torch.tensor(data)
+    pred = self.model_instance.inference(data)
+    pred = torch.argmax(pred,axis=-1)
+    return pred.numpy()
+
+  def fit(self,data,label):
+    data = torch.tensor(data)
+    label = torch.tensor(label)
+    for i in range(self.epoch):
+      pred, (loss,eval) = self.model_instance.run_model(data,label,update=True)
+
+  def predict_proba(self,data):
+    data = torch.tensor(data)
+    pred = self.model_instance.inference(data)
+    return pred.numpy()
+
+  @property
+  def weights(self):
+    return self.model_instance.model.weights
+
+
+
 
 
 def regression_model():

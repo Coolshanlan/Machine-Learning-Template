@@ -1,5 +1,6 @@
 import torch
 from torch.nn import init
+# from torch.cuda.amp import autocast
 from torch import autocast
 from torch.cuda.amp import GradScaler
 import torch.functional as F
@@ -7,7 +8,8 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
 import os
-from utils import Recorder, init_weights, move_to, calculate_metrics
+from .utils import Recorder, init_weights, move_to
+from .eval_utils import calculate_metrics
 
 
 class Model_Instance():
@@ -308,7 +310,7 @@ class Model_Instance():
     @torch.no_grad()
     def inference(self,data):
         self.model.train(False)
-        return self.forward(data).to(torch.device('cpu'))
+        return self.forward(data).to(torch.device('cpu')).detach()
 
     def inference_dataloader(self,dataloader):
         reocord = Recorder()
