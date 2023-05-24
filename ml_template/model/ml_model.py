@@ -82,11 +82,13 @@ class Stack_Ensemble_Model(Ensemble_Model):
       model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
 
     _model = copy.deepcopy(MLModels(self.model_dict))
-    if self.proba_mode:
-      _model.set_proba()
-
     _model.fit(model_data,model_label)
-    model_preds, model_dict_preds=_model.model_predict_fn(stack_model_data)
+
+    if self.proba_mode:
+      model_preds, model_dict_preds=_model._model_predicts_proba(stack_model_data)
+    else:
+      model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
+
     model_preds = self.stack_input_transform(model_preds)
     self.stack_model.fit(model_preds,stack_model_label)
     print(self.stack_model.weights)
@@ -220,7 +222,7 @@ class ML_Weighted_Model():
       one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
       return nn.BCELoss()(pred,one_hot_label) + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
     def loss_reg_fn(pred,label):
-      return nn.MSELoss()(pred,label)
+      return nn.MSELoss()(pred,label.to(torch.float32))
 
     self.model = Weighted_Model(num_model,num_classes)
     self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
@@ -250,7 +252,8 @@ class ML_Weighted_Model():
   def predict(self,data):
     data = torch.tensor(data)
     pred = self.model_instance.inference(data)
-    pred = torch.argmax(pred,axis=-1)
+    if self.num_classes >1:
+      pred = torch.argmax(pred,axis=-1)
     return pred.numpy()
 
   def fit(self,data,label):
