@@ -1,5 +1,5 @@
-# Efficient Pytorch Template
- This is a efficient pytorch template support logger, dataset and all utils that you need during training and inference.
+# Machine Learning Template
+ This is a efficient machine learning template support logger, dataset and all utils that you need during training and inference.
 
 - <a href="#example_code">Example Code</a>
 - <a href="#features">Features</a>
