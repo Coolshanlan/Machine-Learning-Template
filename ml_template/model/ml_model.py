@@ -254,6 +254,8 @@ class ML_Weighted_Model():
     pred = self.model_instance.inference(data)
     if self.num_classes >1:
       pred = torch.argmax(pred,axis=-1)
+    else:
+      pred = pred.reshape(-1)
     return pred.numpy()
 
   def fit(self,data,label):
@@ -274,35 +276,113 @@ class ML_Weighted_Model():
   def weights(self):
     return self.model_instance.model.weights#nn.Softmax(dim=-2)(self.model_instance.model.weights)
 
-def get_stacking_df(cv_models):
+def weighted_stacking_analysis(cv_models,
+                              feature_columns,
+                              fig1_size=(8,15),
+                              fig2_size=(30,30),
+                              fig3_size=(8,20)):
+
+  if not isinstance(cv_models,list):
+    cv_models = [cv_models]
+
+  return_dict={}
+
   assert  isinstance(cv_models[0].stack_model, ML_Weighted_Model), 'only support ML_Weighted_Model'
+  #==================== Model Weights ========================
   stacking_df=pd.DataFrame()
   for cv in range(len(cv_models)):
     weights = cv_models[cv].stack_model.weights.data.detach().numpy()
     for cls in range(weights.shape[-1]):
       cv_stacking_df=pd.DataFrame()
-      cv_stacking_df['model'] = list(cv_models[0].model_list.keys())
+      cv_stacking_df['model'] = list(cv_models[0].model_dict.keys())
       cv_stacking_df['cv']=cv
       cv_stacking_df['class']=cls
       cv_stacking_df['weights']= weights[:,cls]
       stacking_df = pd.concat([stacking_df,cv_stacking_df])
   stacking_df['mean_weights'] = stacking_df[stacking_df.columns[2:]].mean(axis=1)
   stacking_df = stacking_df.set_index(['model'],drop=True).loc[stacking_df.groupby(by=['model']).mean().sort_values(['mean_weights'],ascending=False).index].reset_index(drop=False)
-  return stacking_df
+  return_dict['stacking_weights_df']=stacking_df
 
-def plot_cv_stacking_importance(stacking_df,columns_name):
+  pd.set_option('display.max_rows', 500)
+  #============== Model Classes Importance Plot=================
+  if not os.path.exists('./figure'):
+    os.mkdir('./figure')
   model_names=list(stacking_df.model.unique())
-  fig, ax = plt.subplots(2,1,figsize=(8,12))
+  fig, ax = plt.subplots(2,1,figsize=fig1_size)
   sns.barplot(data=stacking_df, y='model',x='mean_weights',hue_order=model_names,ax=ax[0])
   stacking_df['class'] = stacking_df['class'].astype(str)
   ax[0].set_title('Model importance - mean')
-  stacking_cls_df=stacking_df.groupby(by=['model','class'])[['weights']].mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False])
+
   sns.barplot(data=stacking_df, y='class',x='weights',hue='model',hue_order=model_names,ax=ax[1])
   ax[1].set_title('Model importance - class')
+  plt.savefig('figure/Model_classes_importance.png')
   plt.show()
 
-  print(stacking_df.groupby(by=['model']).weights.mean().sort_values(ascending=False))
-  print(stacking_cls_df.set_index('class'))
+  stacking_cls_df=stacking_df.groupby(by=['model','class'])[['weights']].mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False]).set_index(['class','model'])
+  stacking_mean_df = stacking_df.groupby(by=['model']).weights.mean().sort_values(ascending=False)
+  print('=========== Model Classes Importance ============')
+  print(stacking_mean_df)
+  print(stacking_cls_df)
+  return_dict['model_importance_mean_df']=stacking_mean_df
+  return_dict['model_class_importance_mean_df']=stacking_cls_df
+
+  #============== Feature Classes Importance Plot=================
+  feature_importance_df = pd.DataFrame()
+  for model_name , model in cv_models[0].model_dict.items():
+    if 'feature_importances_' not in cv_models[0].model_dict[model_name].__dir__():
+      continue
+    feature_model_importance_df=pd.DataFrame()
+    feature_model_importance_df['feature_name']=feature_columns
+    feature_model_importance_df['model']=model_name
+    importance_list=np.array([0.0]*len(feature_columns))
+    for cv in range(len(cv_models)):
+      importance = cv_models[cv].model_dict[model_name].feature_importances_
+      importance = importance/sum(importance)
+      importance_list+=np.array(importance)
+    importance = importance_list/len(cv_models)
+    for cls in range(stacking_cls_df.reset_index(drop=False)['class'].nunique()):
+      feature_model_importance_df['importance'] = importance * stacking_cls_df.loc[str(cls)].loc[model_name]['weights']
+      feature_model_importance_df['class'] = str(cls)
+      feature_importance_df = pd.concat([feature_importance_df,feature_model_importance_df])
+  feature_importance_df['mean_importance'] = feature_importance_df.groupby('feature_name').importance.transform(lambda x: x.mean())
+  return_dict['feature_importance_df']=feature_importance_df
+
+  print('=========== Feature Importance ============')
+
+  fig, ax = plt.subplots(1,2,figsize=fig2_size)
+
+  display_feature_model_df=feature_importance_df.groupby(by=['feature_name','model']).importance.mean().reset_index(drop=False)
+  display_feature_model_df['mean_importance'] = display_feature_model_df.groupby('feature_name').importance.transform(lambda x: x.mean())
+  display_feature_model_df = display_feature_model_df.sort_values('mean_importance',ascending=False)
+  sns.barplot(data=display_feature_model_df, y='feature_name',x='importance',hue='model',ax=ax[0])
+
+  display_feature_model_df=display_feature_model_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
+  sns.lineplot(data=display_feature_model_df, y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[0])
+
+  # sns.scatterplot(data=display_feature_model_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False), y='feature_name',x='importance',color='red',s=50)
+  ax[0].set_title('Feature Importance each model ')
+
+  display_feature_importance_df = feature_importance_df.groupby(by=['feature_name','class']).importance.mean().reset_index(drop=False)
+  display_feature_importance_df['mean_importance'] = display_feature_importance_df.groupby('feature_name').importance.transform(lambda x: x.mean())
+  display_feature_importance_df = display_feature_importance_df.sort_values('mean_importance',ascending=False)
+  sns.barplot(data=display_feature_importance_df, y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()),ax=ax[1])
+  _display_feature_importance_df=display_feature_importance_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
+  sns.lineplot(data=_display_feature_importance_df.reset_index(drop=False).sort_values(['importance'],ascending=False), y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[1])
+
+  ax[1].set_title('Feature importance each classes')
+  plt.savefig('figure/Feature_importance_each_classes_and_model.png')
+  plt.show()
+
+  fig, ax = plt.subplots(1,1,figsize=fig3_size)
+  filter_display_feature_importance_df=display_feature_importance_df.sort_values(['class','importance'],ascending=[True,False]).groupby(by=['class']).head(10).set_index(['class','feature_name'])
+  sns.barplot(data=filter_display_feature_importance_df.reset_index(drop=False), y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()))
+  ax.set_title('Each class top 10 features')
+  plt.savefig('figure/Each_class_top_10_features.png')
+  plt.show()
+
+  return return_dict
+
+
 
 def plot_feature_importance(model,columns_name):
   importance = model.feature_importances_
