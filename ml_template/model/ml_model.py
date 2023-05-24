@@ -216,10 +216,11 @@ class Weighted_Model(nn.Module):
 
 class ML_Weighted_Model():
   def __init__(self,num_model, num_classes, lr=2e-3, epoch=None,model_reg=0,classes_reg=0,l1_norm=0) -> None:
-    def loss_fn(pred,label):
-      ce = nn.CrossEntropyLoss()
+    def loss_cls_fn(pred,label):
       one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
       return nn.BCELoss()(pred,one_hot_label) + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
+    def loss_reg_fn(pred,label):
+      return nn.MSELoss()(pred,label)
 
     self.model = Weighted_Model(num_model,num_classes)
     self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
@@ -227,7 +228,7 @@ class ML_Weighted_Model():
     self.num_classes = num_classes
     self.num_model = num_model
     self.load_stacking=False
-    criterion = loss_fn
+    criterion = loss_reg_fn if num_classes ==1 else loss_cls_fn
     optimizer = optim.AdamW(self.model.parameters(),lr=self.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.epoch)
     self.model_instance = Weighted_Model_Instance(model=self.model,
