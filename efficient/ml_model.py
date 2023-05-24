@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 import warnings
 from collections import Counter
 from .utils import KFold_Sampler
+from .loss_family import bi_tempered_logistic_loss
 from tqdm import tqdm
 from .model_instance import *
 from torch import nn
@@ -89,6 +90,19 @@ class MLModels():
     else:
       self.model_dict = models
 
+  def set_proba(self):
+    self.proba_mode=True
+    self.model_predict_fn = self._model_predicts_proba
+    self.remove_no_prob_model()
+
+  def remove_no_prob_model(self):
+    model_dict_tmp = copy.deepcopy(self.model_dict)
+    for model_name, model in self.model_dict.items():
+      if 'predict_proba' not in model.__dir__():
+        print(f"{model_name} don't have [predict_proba]")
+        del model_dict_tmp[model_name]
+    self.model_dict = model_dict_tmp
+
   def fit(self,data,label):
     pbar = tqdm(self.model_dict.items(), total=self.num_models, leave=False, bar_format='{desc:<30}\t{percentage:2.0f}%|{bar:10}{r_bar}')
     for model_name, model in pbar:
@@ -118,6 +132,7 @@ class MLModels():
     for model_name, model in self.model_dict.items():
       pred = model.predict_proba(data)
       model_dict_preds[model_name]=pred
+
     model_preds = self.transform_dict_preds_proba(model_dict_preds)
     return model_preds, model_dict_preds
 
@@ -201,18 +216,6 @@ class Ensemble_Model(MLModels):
     if ensemble_fn:
       self.ensemble_func=ensemble_fn
 
-  def set_proba(self):
-    self.proba_mode=True
-    self.model_predict_fn = super()._model_predicts_proba
-    self.remove_no_prob_model()
-
-  def remove_no_prob_model(self):
-    model_dict_tmp = copy.deepcopy(self.model_dict)
-    for model_name, model in self.model_dict.items():
-      if 'predict_proba' not in model.__dir__():
-        print(f"{model_name} don't have [predict_proba]")
-        del model_dict_tmp[model_name]
-    self.model_dict = model_dict_tmp
 
   def ensemble_func(self,model_pred):
     raise NotImplementedError
@@ -246,13 +249,18 @@ class Stack_Ensemble_Model(Ensemble_Model):
   """
   overwrite: ensemble_func and fit
   """
-  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.1) -> None:
+  def __init__(self, model_dict,stack_model = SVC(C=0.1,probability=True),stack_training_split=0.3) -> None:
     self.stack_model = copy.deepcopy(stack_model)
     self.stack_training_split = stack_training_split
     super().__init__(model_dict)
 
   def stack_input_transform(self,model_preds):
     return model_preds
+
+  def fit_stack_model(self,data,label):
+    model_preds, model_dict_preds=self.model_predict_fn(data)
+    model_preds = self.stack_input_transform(model_preds)
+    self.stack_model.fit(model_preds,label)
 
   def fit(self, data, label):
     split_dict={0.1:(10,1),
@@ -261,15 +269,23 @@ class Stack_Ensemble_Model(Ensemble_Model):
                 0.25:(4,1),
                 0.3:(3,1),
                 0.5:(2,1),}
+
     if self.stack_training_split not in split_dict.keys():
       model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=int(self.stack_training_split*100))
     else:
       model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
-    super().fit(model_data,model_label)
 
-    model_preds, model_dict_preds=self.model_predict_fn(stack_model_data)
+    _model = copy.deepcopy(MLModels(self.model_dict))
+    if self.proba_mode:
+      _model.set_proba()
+
+    _model.fit(model_data,model_label)
+    model_preds, model_dict_preds=_model.model_predict_fn(stack_model_data)
     model_preds = self.stack_input_transform(model_preds)
     self.stack_model.fit(model_preds,stack_model_label)
+    print(self.stack_model.weights)
+    super().fit(data,label)
+
 
   def ensemble_func(self,model_preds):
     model_preds = self.stack_input_transform(model_preds)
@@ -327,7 +343,10 @@ class Weighted_Model_Instance(Model_Instance):
                 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"),
                 amp=False,
                 accum_iter=1,
-                model_weight_init=None):
+                model_weight_init=None,
+                l1_norm=0,
+                model_reg=0,
+                classes_reg=0):
       super().__init__(model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
@@ -339,19 +358,23 @@ class Weighted_Model_Instance(Model_Instance):
                 amp=amp,
                 accum_iter=accum_iter,
                 model_weight_init=model_weight_init)
+      self.model_reg=model_reg
+      self.classes_reg=classes_reg
+      self.l1_norm=l1_norm
 
   def get_loss(self,pred,label):
       loss_return = self.loss_function(pred,label)
-      #引入調和平均數，讓model weight 一起縮放
-      # l1_regularization = 1 * torch.norm(torch.prod(self.model.weights.data,dim=-1)/torch.sum(self.model.weights.data,dim=-1), 1)
-      l1_regularization = 1 * torch.norm(self.model.weights.data, 1)
-      loss_return += l1_regularization
+      l1_regularization = torch.norm(self.model.weights, 1)/(self.model.num_classes*self.model.num_model)
+      # l2_regularization = torch.norm(self.model.weights, 2)/self.model.weights.sum()
+      model_regularization = torch.norm(self.model.weights.sum(dim=-1), 2)/self.model.weights.sum()
+      classes_regularization = torch.norm(self.model.weights.sum(dim=-2), 2)/self.model.weights.sum()
+
+      loss_return +=  self.model_reg*model_regularization +self.classes_reg*classes_regularization+self.l1_norm*l1_regularization
       if not isinstance(loss_return,tuple):
           loss_return = (loss_return,{'loss':loss_return.detach().to(torch.device('cpu'))})
       else:
           loss,loss_dict=loss_return
 
-          # display in console
           if 'loss' not in loss_dict.keys():
               loss_dict['loss'] = loss
           loss_dict = {k:loss_dict[k].detach().to(torch.device('cpu').item()) for k in loss_dict.keys()}
@@ -361,42 +384,61 @@ class Weighted_Model_Instance(Model_Instance):
 
 
 class Weighted_Model(nn.Module):
-  def __init__(self,num_model,num_classes,init_mode='rand',init_value=0.1) -> None:
+  def __init__(self,num_model,num_classes) -> None:
     super(Weighted_Model, self).__init__()
-    self.init_mode=init_mode
     self.num_model=num_model
     self.num_classes=num_classes
-    self.init_value=init_value
-    if self.init_mode =='rand':
-      self.weights = nn.Parameter(torch.abs(torch.rand(num_model,num_classes))+init_value)
-    else:
-      self.weights = nn.Parameter(torch.abs(torch.ones(num_model,num_classes)))
+    self.weights = nn.Parameter(torch.ones(num_model,num_classes)*0.5)
     self.active_fn = nn.ReLU()
     self.softmax = nn.Softmax(dim=-1)
     if num_classes >1:
       self.pred_fn = nn.Softmax(dim=-1)
     else:
-      self.pred_fn = nn.Sigmoid()
+      self.pred_fn = nn.Identity()
+
 
   def forward(self,data):
-    self.weights.data=self.active_fn(self.weights.view(-1).data).reshape(self.num_model,self.num_classes)
-    x = self.weights.view(-1)*data#M*C
-    x = self.active_fn(x)
+    self.weights.data=self.active_fn(self.weights.data)
+    x = nn.Softmax(dim=-2)(self.weights).reshape(-1)*data#M*C
     x = x.view(-1,self.num_model,self.num_classes)
     x = x.sum(axis=1)
-    x = torch.div(x,torch.sum(self.weights.T,dim=-1))
     x = self.pred_fn(x)
     return x
 
+# class Fully_Weighted_Model(nn.Module):
+#   def __init__(self,num_model,num_classes) -> None:
+#     super(Weighted_Model, self).__init__()
+#     self.num_model=num_model
+#     self.num_classes=num_classes
+#     self.weights = nn.Linear(num_model*num_classes,num_classes)
+#     self.active_fn = nn.ReLU()
+#     self.softmax = nn.Softmax(dim=-1)
+#     if num_classes >1:
+#       self.pred_fn = nn.Softmax(dim=-1)
+#     else:
+#       self.pred_fn = nn.Sigmoid()
+
+
+#   def forward(self,data):
+#     # self.weights.data=self.active_fn(self.weights.data)
+#     x = self.weights(data)
+#     x = self.pred_fn(x)
+#     return x
+
 class ML_Weighted_Model():
-  def __init__(self,num_model, num_classes, lr=1e-3, epoch=500,init_mode='rand',init_value=0.1) -> None:
-    self.model = Weighted_Model(num_model,num_classes,init_mode=init_mode,init_value=init_value)
-    self.epoch=epoch
+  def __init__(self,num_model, num_classes, lr=2e-3, epoch=None,model_reg=0,classes_reg=0,l1_norm=0) -> None:
+    def loss_fn(pred,label):
+      ce = nn.CrossEntropyLoss()
+      one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
+      return nn.BCELoss()(pred,one_hot_label) + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
+
+    self.model = Weighted_Model(num_model,num_classes)
+    self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
     self.lr = lr
     self.num_classes = num_classes
     self.num_model = num_model
-    self.init_value=init_value
-    criterion = nn.CrossEntropyLoss()
+    self.load_stacking=False
+    criterion = loss_fn
     optimizer = optim.AdamW(self.model.parameters(),lr=self.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.epoch)
     self.model_instance = Weighted_Model_Instance(model=self.model,
@@ -405,9 +447,15 @@ class ML_Weighted_Model():
                                     scheduler=scheduler,
                                     scheduler_epoch=False,
                                     device='cpu',
-                                    #clip_grad=1,
+                                    clip_grad=1,
                                     amp=False,
-                                    )#model_weight_init='normal')
+                                    model_reg=model_reg,
+                                    classes_reg=classes_reg,
+                                    l1_norm=l1_norm)
+
+  def load_weights(self,weights):
+      self.load_stacking=True
+      self.model.weights = nn.Parameter(weights)
 
   def predict(self,data):
     data = torch.tensor(data)
@@ -416,10 +464,13 @@ class ML_Weighted_Model():
     return pred.numpy()
 
   def fit(self,data,label):
+    if self.load_stacking:
+      return
     data = torch.tensor(data)
     label = torch.tensor(label)
     for i in range(self.epoch):
       pred, (loss,eval) = self.model_instance.run_model(data,label,update=True)
+    self.model_instance.inference(data)
 
   def predict_proba(self,data):
     data = torch.tensor(data)
@@ -428,7 +479,40 @@ class ML_Weighted_Model():
 
   @property
   def weights(self):
-    return self.model_instance.model.weights
+    return self.model_instance.model.weights#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+
+def get_stacking_df(cv_models):
+  assert  isinstance(cv_models[0].stack_model, ML_Weighted_Model), 'only support ML_Weighted_Model'
+  stacking_df=pd.DataFrame()
+  for cv in range(len(cv_models)):
+    weights = cv_models[cv].stack_model.weights.data.detach().numpy()
+    for cls in range(weights.shape[-1]):
+      cv_stacking_df=pd.DataFrame()
+      cv_stacking_df['model'] = list(cv_models[0].model_list.keys())
+      cv_stacking_df['cv']=cv
+      cv_stacking_df['class']=cls
+      cv_stacking_df['weights']= weights[:,cls]
+      stacking_df = pd.concat([stacking_df,cv_stacking_df])
+  stacking_df['mean_weights'] = stacking_df[stacking_df.columns[2:]].mean(axis=1)
+  stacking_df = stacking_df.set_index(['model'],drop=True).loc[stacking_df.groupby(by=['model']).mean().sort_values(['mean_weights'],ascending=False).index].reset_index(drop=False)
+  return stacking_df
+
+def plot_cv_stacking_importance(stacking_df,columns_name):
+  model_names=list(stacking_df.model.unique())
+  fig, ax = plt.subplots(2,1,figsize=(8,12))
+  sns.barplot(data=stacking_df, y='model',x='mean_weights',hue_order=model_names,ax=ax[0])
+  stacking_df['class'] = stacking_df['class'].astype(str)
+  ax[0].set_title('Model importance - mean')
+  stacking_cls_df=stacking_df.groupby(by=['model','class'])[['weights']].mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False])
+  sns.barplot(data=stacking_df, y='class',x='weights',hue='model',hue_order=model_names,ax=ax[1])
+  ax[1].set_title('Model importance - class')
+  plt.show()
+
+  print(stacking_df.groupby(by=['model']).weights.mean().sort_values(ascending=False))
+  print(stacking_cls_df.set_index('class'))
+
+
+
 
 
 
