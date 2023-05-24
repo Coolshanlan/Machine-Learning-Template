@@ -8,8 +8,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.linear_model import LogisticRegression
 import os
-from .utils import Recorder, init_weights, move_to
-from .eval_utils import calculate_metrics
+from ..utils import Recorder, init_weights, move_to, calculate_metrics
 
 
 class Model_Instance():
