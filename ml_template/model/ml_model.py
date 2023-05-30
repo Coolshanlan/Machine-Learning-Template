@@ -241,14 +241,16 @@ class ML_Weighted_Model():
     def loss_cls_fn(pred,label):
       ce_loss = nn.CrossEntropyLoss()(pred,label)
 
-      one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
-      return  FocalLoss()(pred,one_hot_label)+ce_loss + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
+      # one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
+      return ce_loss #FocalLoss()(pred,one_hot_label)+ce_loss + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
     def loss_reg_fn(pred,label):
       return nn.MSELoss()(pred,label.to(torch.float32))
 
     self.model = Weighted_Model(num_model,num_classes)
     self.load_stacking=False
-    self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
+    #self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
+    self.epoch=1 if epoch == None else epoch
+
     self.lr = lr
     self.num_classes = num_classes
     self.num_model = num_model
@@ -286,7 +288,10 @@ class ML_Weighted_Model():
     data = torch.tensor(data)
     label = torch.tensor(label)
     for i in range(self.epoch):
-      pred, (loss,eval) = self.model_instance.run_model(data,label,update=True)
+      for _data, _label in zip(data,label):
+        _data = torch.tensor(_data).view(1,-1)
+        _label = torch.tensor(_label).view(-1)
+        pred, (loss,eval) = self.model_instance.run_model(_data,_label,update=True)
     self.model_instance.inference(data)
 
   def predict_proba(self,data):
@@ -296,7 +301,7 @@ class ML_Weighted_Model():
 
   @property
   def weights(self):
-    return nn.Softmax(dim=-2)(self.model_instance.model.weights)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+    return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
 
 def weighted_stacking_analysis(cv_models,
                               feature_columns,
