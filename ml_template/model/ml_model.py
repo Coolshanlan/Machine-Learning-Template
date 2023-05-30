@@ -182,7 +182,7 @@ class Weighted_Model(nn.Module):
     super(Weighted_Model, self).__init__()
     self.num_model=num_model
     self.num_classes=num_classes
-    self.weights = nn.Parameter(torch.ones(num_model,num_classes)*0.5)
+    self.weights = nn.Parameter(torch.ones(num_model,num_classes))
     self.active_fn = nn.ReLU()
     self.softmax = nn.Softmax(dim=-1)
     # if num_classes >1:
@@ -248,8 +248,8 @@ class ML_Weighted_Model():
 
     self.model = Weighted_Model(num_model,num_classes)
     self.load_stacking=False
-    #self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
-    self.epoch=1 if epoch == None else epoch
+    self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
+    # self.epoch=1 if epoch == None else epoch
 
     self.lr = lr
     self.num_classes = num_classes
@@ -288,10 +288,10 @@ class ML_Weighted_Model():
     data = torch.tensor(data)
     label = torch.tensor(label)
     for i in range(self.epoch):
-      for _data, _label in zip(data,label):
-        _data = torch.tensor(_data).view(1,-1)
-        _label = torch.tensor(_label).view(-1)
-        pred, (loss,eval) = self.model_instance.run_model(_data,_label,update=True)
+      # for _data, _label in zip(data,label):
+        # _data = torch.tensor(_data).view(1,-1)
+        # _label = torch.tensor(_label).view(-1)
+      pred, (loss,eval) = self.model_instance.run_model(data,label,update=True)
     self.model_instance.inference(data)
 
   def predict_proba(self,data):
