@@ -75,23 +75,26 @@ class Stack_Ensemble_Model(Ensemble_Model):
                 0.25:(4,1),
                 0.3:(3,1),
                 0.5:(2,1),}
+    if not (isinstance(self.stack_model,ML_Weighted_Model) and self.stack_model.load_stacking ):
 
-    if self.stack_training_split not in split_dict.keys():
-      model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=int(self.stack_training_split*100))
-    else:
-      model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
+      if self.stack_training_split not in split_dict.keys():
+        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=int(self.stack_training_split*100))
+      else:
+        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
 
-    _model = copy.deepcopy(MLModels(self.model_dict))
-    _model.fit(model_data,model_label)
+      _model = copy.deepcopy(MLModels(self.model_dict))
+      _model.fit(model_data,model_label)
 
-    if self.proba_mode:
-      model_preds, model_dict_preds=_model._model_predicts_proba(stack_model_data)
-    else:
-      model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
+      if self.proba_mode:
+        model_preds, model_dict_preds=_model._model_predicts_proba(stack_model_data)
+      else:
+        model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
 
-    model_preds = self.stack_input_transform(model_preds)
-    self.stack_model.fit(model_preds,stack_model_label)
-    print(self.stack_model.weights)
+      model_preds = self.stack_input_transform(model_preds)
+      self.stack_model.fit(model_preds,stack_model_label)
+      if isinstance(self.stack_model,ML_Weighted_Model):
+        print(self.stack_model.weights)
+
     super().fit(data,label)
 
 
@@ -182,10 +185,10 @@ class Weighted_Model(nn.Module):
     self.weights = nn.Parameter(torch.ones(num_model,num_classes)*0.5)
     self.active_fn = nn.ReLU()
     self.softmax = nn.Softmax(dim=-1)
-    if num_classes >1:
-      self.pred_fn = nn.Softmax(dim=-1)
-    else:
-      self.pred_fn = nn.Identity()
+    # if num_classes >1:
+    #   self.pred_fn = nn.Softmax(dim=-1)
+    # else:
+    #   self.pred_fn = nn.Identity()
 
 
   def forward(self,data):
@@ -193,7 +196,7 @@ class Weighted_Model(nn.Module):
     x = nn.Softmax(dim=-2)(self.weights).reshape(-1)*data#M*C
     x = x.view(-1,self.num_model,self.num_classes)
     x = x.sum(axis=1)
-    x = self.pred_fn(x)
+    # x = self.pred_fn(x)
     return x
 
 # class Fully_Weighted_Model(nn.Module):
@@ -216,20 +219,39 @@ class Weighted_Model(nn.Module):
 #     x = self.pred_fn(x)
 #     return x
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2):
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, input, target):
+        ce_loss = F.cross_entropy(input, target, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        return focal_loss.mean()
+
 class ML_Weighted_Model():
   def __init__(self,num_model, num_classes, lr=2e-3, epoch=None,model_reg=0,classes_reg=0,l1_norm=0) -> None:
     def loss_cls_fn(pred,label):
+      ce_loss = nn.CrossEntropyLoss()(pred,label)
+
       one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
-      return nn.BCELoss()(pred,one_hot_label) + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
+      return  FocalLoss()(pred,one_hot_label)+ce_loss + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
     def loss_reg_fn(pred,label):
       return nn.MSELoss()(pred,label.to(torch.float32))
 
     self.model = Weighted_Model(num_model,num_classes)
+    self.load_stacking=False
     self.epoch=(num_classes*num_model)*9 if epoch == None else epoch
     self.lr = lr
     self.num_classes = num_classes
     self.num_model = num_model
-    self.load_stacking=False
     criterion = loss_reg_fn if num_classes ==1 else loss_cls_fn
     optimizer = optim.AdamW(self.model.parameters(),lr=self.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.epoch)
@@ -270,11 +292,11 @@ class ML_Weighted_Model():
   def predict_proba(self,data):
     data = torch.tensor(data)
     pred = self.model_instance.inference(data)
-    return pred.numpy()
+    return nn.Softmax(dim=-1)(pred).numpy()
 
   @property
   def weights(self):
-    return self.model_instance.model.weights#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+    return nn.Softmax(dim=-2)(self.model_instance.model.weights)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
 
 def weighted_stacking_analysis(cv_models,
                               feature_columns,
@@ -299,7 +321,7 @@ def weighted_stacking_analysis(cv_models,
       cv_stacking_df['class']=cls
       cv_stacking_df['weights']= weights[:,cls]
       stacking_df = pd.concat([stacking_df,cv_stacking_df])
-  stacking_df['mean_weights'] = stacking_df[stacking_df.columns[2:]].mean(axis=1)
+  stacking_df['mean_weights'] = stacking_df.groupby('model').weights.transform(lambda x: x.mean())
   stacking_df = stacking_df.set_index(['model'],drop=True).loc[stacking_df.groupby(by=['model']).mean().sort_values(['mean_weights'],ascending=False).index].reset_index(drop=False)
   return_dict['stacking_weights_df']=stacking_df
 
@@ -318,7 +340,7 @@ def weighted_stacking_analysis(cv_models,
   plt.savefig('figure/Model_classes_importance.png')
   plt.show()
 
-  stacking_cls_df=stacking_df.groupby(by=['model','class'])[['weights']].mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False]).set_index(['class','model'])
+  stacking_cls_df=stacking_df.groupby(by=['model','class']).weights.mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False]).set_index(['class','model'])
   stacking_mean_df = stacking_df.groupby(by=['model']).weights.mean().sort_values(ascending=False)
   print('=========== Model Classes Importance ============')
   print(stacking_mean_df)
@@ -375,10 +397,13 @@ def weighted_stacking_analysis(cv_models,
 
   fig, ax = plt.subplots(1,1,figsize=fig3_size)
   filter_display_feature_importance_df=display_feature_importance_df.sort_values(['class','importance'],ascending=[True,False]).groupby(by=['class']).head(10).set_index(['class','feature_name'])
+  filter_display_feature_importance_df['mean_importance'] = filter_display_feature_importance_df.groupby('feature_name').importance.transform(lambda x: x.mean())
+  filter_display_feature_importance_df = filter_display_feature_importance_df.sort_values('mean_importance',ascending=False)
   sns.barplot(data=filter_display_feature_importance_df.reset_index(drop=False), y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()))
   ax.set_title('Each class top 10 features')
   plt.savefig('figure/Each_class_top_10_features.png')
   plt.show()
+  print(filter_display_feature_importance_df.reset_index(drop=False).sort_values(['class','importance'],ascending=[True,False]))
 
   return return_dict
 
