@@ -78,9 +78,9 @@ class Stack_Ensemble_Model(Ensemble_Model):
     if not (isinstance(self.stack_model,ML_Weighted_Model) and self.stack_model.load_stacking ):
 
       if self.stack_training_split not in split_dict.keys():
-        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold_data(n_fold=int(self.stack_training_split*100))
+        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=100).get_multi_fold(n_fold=int(self.stack_training_split*100))
       else:
-        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold_data(n_fold=split_dict[self.stack_training_split][1])
+        model_data, model_label, stack_model_data, stack_model_label = KFold_Sampler(data,label,n_splits=split_dict[self.stack_training_split][0]).get_multi_fold(n_fold=split_dict[self.stack_training_split][1])
 
       _model = copy.deepcopy(MLModels(self.model_dict))
       _model.fit(model_data,model_label)
@@ -201,25 +201,25 @@ class Weighted_Model(nn.Module):
     # x = self.pred_fn(x)
     return x
 
-# class Fully_Weighted_Model(nn.Module):
-#   def __init__(self,num_model,num_classes) -> None:
-#     super(Weighted_Model, self).__init__()
-#     self.num_model=num_model
-#     self.num_classes=num_classes
-#     self.weights = nn.Linear(num_model*num_classes,num_classes)
-#     self.active_fn = nn.ReLU()
-#     self.softmax = nn.Softmax(dim=-1)
-#     if num_classes >1:
-#       self.pred_fn = nn.Softmax(dim=-1)
-#     else:
-#       self.pred_fn = nn.Sigmoid()
+class Fully_Weighted_Model(nn.Module):
+  def __init__(self,num_model,num_classes) -> None:
+    super(Weighted_Model, self).__init__()
+    self.num_model=num_model
+    self.num_classes=num_classes
+    self.weights = nn.Linear(num_model*num_classes,num_classes)
+    self.active_fn = nn.ReLU()
+    self.softmax = nn.Softmax(dim=-1)
+    if num_classes >1:
+      self.pred_fn = nn.Softmax(dim=-1)
+    else:
+      self.pred_fn = nn.Sigmoid()
 
 
-#   def forward(self,data):
-#     # self.weights.data=self.active_fn(self.weights.data)
-#     x = self.weights(data)
-#     x = self.pred_fn(x)
-#     return x
+  def forward(self,data):
+    # self.weights.data=self.active_fn(self.weights.data)
+    x = self.weights(data)
+    x = self.pred_fn(x)
+    return x
 
 import torch
 import torch.nn as nn
@@ -307,6 +307,7 @@ class ML_Weighted_Model():
   @property
   def weights(self):
     return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights.cpu().detach()),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+
 
 def weighted_stacking_analysis(cv_models,
                               feature_columns,
@@ -457,8 +458,6 @@ def weighted_stacking_analysis(cv_models,
   print(filter_display_feature_importance_df.reset_index(drop=False).sort_values(['class','importance'],ascending=[True,False]))
 
   return return_dict
-
-
 
 def plot_feature_importance(model,columns_name):
   importance = model.feature_importances_
