@@ -16,6 +16,8 @@ from sklearn.neighbors import KNeighborsRegressor,KNeighborsClassifier
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.metrics import mean_absolute_error
+
 import lightgbm as lgb
 from glob import glob
 import pandas as pd
@@ -90,11 +92,14 @@ class Stack_Ensemble_Model(Ensemble_Model):
       else:
         model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
       # evaluation_fn = calculate_metrics(['recall','precision','acc','f1score'])
-      # _model.evaluate(stack_model_data,stack_model_label,evaluation_fn=evaluation_fn)
+      print('===== Model pre-training evaluation =====')
+      _model.evaluate(stack_model_data,stack_model_label,evaluation_fn=mean_absolute_error)
       model_preds = self.stack_input_transform(model_preds)
       self.stack_model.fit(model_preds,stack_model_label)
       if isinstance(self.stack_model,ML_Weighted_Model):
-        print(self.stack_model.weights)
+        for midx,model_name in enumerate(list(_model.model_dict.keys())):
+          print(model_name,':',np.array(self.stack_model.weights[midx,:]))
+
 
     super().fit(data,label)
 
@@ -195,7 +200,7 @@ class Weighted_Model(nn.Module):
   def forward(self,data):
     self.weights.data=self.active_fn(self.weights.data)
     # x = nn.Softmax(dim=-2)(self.weights).reshape(-1)*data#M*C
-    x = self.weights.reshape(-1)*data
+    x = (self.weights/self.weights.sum(dim=-2)).reshape(-1)*data
     x = x.view(-1,self.num_model,self.num_classes)
     x = x.sum(axis=1)
     # x = self.pred_fn(x)
@@ -306,7 +311,11 @@ class ML_Weighted_Model():
 
   @property
   def weights(self):
-    return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights.cpu().detach()),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+    # print(self.model_instance.model.weights.cpu().detach())
+    # return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights.cpu().detach()),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+    w = self.model_instance.model.weights.cpu().detach()
+    return torch.round(w/w.sum(dim=-2),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+
 
 
 def weighted_stacking_analysis(cv_models,
