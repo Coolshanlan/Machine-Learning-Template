@@ -142,7 +142,7 @@ class KFold_Sampler():
 
     def splits(self):
         for i_fold in range(self.total_split):
-            yield self.get_data(i_fold)
+            yield self.get_fold(i_fold)
 
     @property
     def total_split(self):

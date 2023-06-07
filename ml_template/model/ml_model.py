@@ -411,7 +411,7 @@ def weighted_stacking_analysis(cv_models,
   display_feature_model_df=display_feature_model_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
   # sns.lineplot(data=display_feature_model_df, y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[0])
   ax[0].set_title('Feature Importance each model ')
-
+  ax[0].invert_yaxis()
 
     #==================plot2
   display_feature_importance_df = feature_importance_df.groupby(by=['feature_name','class']).importance.mean().reset_index(drop=False)
@@ -437,7 +437,7 @@ def weighted_stacking_analysis(cv_models,
           left=stack_list,color=colors[cidx])
       stack_list +=  display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'importance'].values
   ax[1].legend(n_class)
-
+  ax[1].invert_yaxis()
 
   # sns.barplot(data=display_feature_importance_df, y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()),ax=ax[1])
   # _display_feature_importance_df=display_feature_importance_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
