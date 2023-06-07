@@ -89,7 +89,8 @@ class Stack_Ensemble_Model(Ensemble_Model):
         model_preds, model_dict_preds=_model._model_predicts_proba(stack_model_data)
       else:
         model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
-
+      # evaluation_fn = calculate_metrics(['recall','precision','acc','f1score'])
+      # _model.evaluate(stack_model_data,stack_model_label,evaluation_fn=evaluation_fn)
       model_preds = self.stack_input_transform(model_preds)
       self.stack_model.fit(model_preds,stack_model_label)
       if isinstance(self.stack_model,ML_Weighted_Model):
@@ -193,7 +194,8 @@ class Weighted_Model(nn.Module):
 
   def forward(self,data):
     self.weights.data=self.active_fn(self.weights.data)
-    x = nn.Softmax(dim=-2)(self.weights).reshape(-1)*data#M*C
+    # x = nn.Softmax(dim=-2)(self.weights).reshape(-1)*data#M*C
+    x = self.weights.reshape(-1)*data
     x = x.view(-1,self.num_model,self.num_classes)
     x = x.sum(axis=1)
     # x = self.pred_fn(x)
@@ -239,11 +241,13 @@ class FocalLoss(nn.Module):
 class ML_Weighted_Model():
   def __init__(self,num_model, num_classes, lr=2e-3, epoch=None,model_reg=0,classes_reg=0,l1_norm=0) -> None:
     def loss_cls_fn(pred,label):
+      label = label.to(device)
       ce_loss = nn.CrossEntropyLoss()(pred,label)
 
       # one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
       return ce_loss #FocalLoss()(pred,one_hot_label)+ce_loss + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
     def loss_reg_fn(pred,label):
+      label = label.to(device)
       return nn.MSELoss()(pred,label.to(torch.float32))
 
     self.model = Weighted_Model(num_model,num_classes)
@@ -257,12 +261,13 @@ class ML_Weighted_Model():
     criterion = loss_reg_fn if num_classes ==1 else loss_cls_fn
     optimizer = optim.AdamW(self.model.parameters(),lr=self.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.epoch)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     self.model_instance = Weighted_Model_Instance(model=self.model,
                                     optimizer=optimizer,
                                     loss_function=criterion,
                                     scheduler=scheduler,
                                     scheduler_epoch=False,
-                                    device='cpu',
+                                    device=device,
                                     clip_grad=1,
                                     amp=False,
                                     model_reg=model_reg,
@@ -280,7 +285,7 @@ class ML_Weighted_Model():
       pred = torch.argmax(pred,axis=-1)
     else:
       pred = pred.reshape(-1)
-    return pred.numpy()
+    return pred.cpu().detach().numpy()
 
   def fit(self,data,label):
     if self.load_stacking:
@@ -297,11 +302,11 @@ class ML_Weighted_Model():
   def predict_proba(self,data):
     data = torch.tensor(data)
     pred = self.model_instance.inference(data)
-    return nn.Softmax(dim=-1)(pred).numpy()
+    return nn.Softmax(dim=-1)(pred).cpu().detach().numpy()
 
   @property
   def weights(self):
-    return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
+    return torch.round(nn.Softmax(dim=-2)(self.model_instance.model.weights.cpu().detach()),decimals=3)#nn.Softmax(dim=-2)(self.model_instance.model.weights)
 
 def weighted_stacking_analysis(cv_models,
                               feature_columns,
@@ -381,20 +386,61 @@ def weighted_stacking_analysis(cv_models,
   display_feature_model_df=feature_importance_df.groupby(by=['feature_name','model']).importance.mean().reset_index(drop=False)
   display_feature_model_df['mean_importance'] = display_feature_model_df.groupby('feature_name').importance.transform(lambda x: x.mean())
   display_feature_model_df = display_feature_model_df.sort_values('mean_importance',ascending=False)
-  sns.barplot(data=display_feature_model_df, y='feature_name',x='importance',hue='model',ax=ax[0])
+  if display_feature_model_df.model.nunique()<=10:
+    colors = sns.color_palette('tab10',display_feature_model_df.model.nunique())
+  else:
+    colors = sns.color_palette('tab20',display_feature_model_df.model.nunique())
+  stack_list=None
+  n_model=display_feature_model_df.model.nunique()
+  model_list = display_feature_model_df.groupby('model').importance.mean().sort_values(ascending=False).index
+
+  for midx,model in enumerate(model_list):
+    if stack_list is None :
+      ax[0].barh(display_feature_model_df.loc[display_feature_model_df.model == model,'feature_name'],\
+        display_feature_model_df.loc[display_feature_model_df.model == model,'importance']/n_model,\
+          color=colors[midx])
+      stack_list=display_feature_model_df.loc[display_feature_model_df.model == model,'importance']/n_model
+    else:
+      ax[0].barh(display_feature_model_df.loc[display_feature_model_df.model == model,'feature_name'],\
+        display_feature_model_df.loc[display_feature_model_df.model == model,'importance']/n_model,\
+          left=stack_list,color=colors[midx])
+      stack_list +=  display_feature_model_df.loc[display_feature_model_df.model == model,'importance'].values/n_model
+  ax[0].legend(model_list)
 
   display_feature_model_df=display_feature_model_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
-  sns.lineplot(data=display_feature_model_df, y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[0])
-
-  # sns.scatterplot(data=display_feature_model_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False), y='feature_name',x='importance',color='red',s=50)
+  # sns.lineplot(data=display_feature_model_df, y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[0])
   ax[0].set_title('Feature Importance each model ')
 
+
+    #==================plot2
   display_feature_importance_df = feature_importance_df.groupby(by=['feature_name','class']).importance.mean().reset_index(drop=False)
   display_feature_importance_df['mean_importance'] = display_feature_importance_df.groupby('feature_name').importance.transform(lambda x: x.mean())
   display_feature_importance_df = display_feature_importance_df.sort_values('mean_importance',ascending=False)
-  sns.barplot(data=display_feature_importance_df, y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()),ax=ax[1])
-  _display_feature_importance_df=display_feature_importance_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
-  sns.lineplot(data=_display_feature_importance_df.reset_index(drop=False).sort_values(['importance'],ascending=False), y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[1])
+
+  if display_feature_importance_df['class'].nunique()<=10:
+    colors = sns.color_palette('tab10',display_feature_importance_df['class'].nunique())
+  else:
+    colors = sns.color_palette('tab20',display_feature_importance_df['class'].nunique())
+  stack_list=None
+  n_class=display_feature_importance_df['class'].sort_values().unique()
+
+  for cidx,classname in enumerate(n_class):
+    if stack_list is None :
+      ax[1].barh(display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'feature_name'],\
+        display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'importance'],\
+          color=colors[cidx])
+      stack_list=display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'importance']
+    else:
+      ax[1].barh(display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'feature_name'],\
+        display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'importance'],\
+          left=stack_list,color=colors[cidx])
+      stack_list +=  display_feature_importance_df.loc[display_feature_importance_df['class'] == classname,'importance'].values
+  ax[1].legend(n_class)
+
+
+  # sns.barplot(data=display_feature_importance_df, y='feature_name',x='importance',hue='class',hue_order=list(feature_importance_df['class'].unique()),ax=ax[1])
+  # _display_feature_importance_df=display_feature_importance_df.groupby(['feature_name']).importance.mean().reset_index(drop=False).sort_values(['importance'],ascending=False)
+  # sns.lineplot(data=_display_feature_importance_df.reset_index(drop=False).sort_values(['importance'],ascending=False), y='feature_name',x='importance',color='#3caea3',linewidth=3,ax=ax[1])
 
   ax[1].set_title('Feature importance each classes')
   plt.savefig('figure/Feature_importance_each_classes_and_model.png')

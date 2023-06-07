@@ -257,7 +257,7 @@ def pp_matrix_from_data(
             for i in list(ascii_uppercase)[0 : len(np.unique(y_test))]
         ]
 
-    confm = confusion_matrix(predictions,y_test)
+    confm = confusion_matrix(y_test, predictions)
     fz = fz
     figsize = figsize
     show_null_values = show_null_values

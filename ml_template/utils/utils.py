@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import os
 from sklearn.model_selection import RepeatedStratifiedKFold
+from IPython.display import HTML
 
 class Recorder(dict):
     '''
@@ -59,7 +60,7 @@ def init_weights(net, init_type='normal', gain=0.02):
             init.normal_(m.weight.data, 1.0, gain)
             init.constant_(m.bias.data, 0.0)
 
-    #print('initialize network with %s' % init_type)
+    print('initialize network with %s' % init_type)
     net.apply(init_func)
 
 def setSeed(seed=31,tor=True,tensorf=False):
@@ -111,13 +112,13 @@ def print_model_params(model):
 
 
 class KFold_Sampler():
-    def __init__(self,data,label,n_splits,n_repeats=1) -> None:
+    def __init__(self,data,label,n_splits,n_repeats=1,random_state=3131) -> None:
         self.fold_index = []
         self.data = np.array(data)
         self.label = np.array(label)
         self.n_splits = n_splits
         self.n_repeats = n_repeats
-        self.skf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats)
+        self.skf = RepeatedStratifiedKFold(n_splits=n_splits, n_repeats=n_repeats, random_state=random_state)
         self._get_fold_index()
 
     def _get_fold_index(self):
@@ -125,19 +126,18 @@ class KFold_Sampler():
             self.fold_index.append((train_index, test_index))
 
 
-    def get_data(self,fold=0):
+    def get_fold(self,fold=0):
         (train_index, test_index) = self.fold_index[fold]
         train_data, train_label = self.data[train_index], self.label[train_index]
         test_data, test_label = self.data[test_index], self.label[test_index]
         return train_data, train_label, test_data, test_label
 
-    def get_multi_fold_data(self,n_fold=1):
+    def get_multi_fold(self,n_fold=1):
         test_index_list = np.concatenate([ self.fold_index[i][1] for i in range(n_fold)])
         train_index_list = list(set(list(range(len(self.label))))-set(test_index_list))
         train_data, train_label = self.data[train_index_list], self.label[train_index_list]
         test_data, test_label = self.data[test_index_list], self.label[test_index_list]
         return train_data, train_label, test_data, test_label
-
 
 
     def splits(self):
@@ -147,3 +147,11 @@ class KFold_Sampler():
     @property
     def total_split(self):
         return self.n_splits * self.n_repeats
+
+
+def multiple_table(table_list,names=None):
+    contant=''.join([ '<td>'+table._repr_html_()+'</td>'  for table in table_list])
+    if names:
+        title_columns=''.join([ '<td style="text-align:center;font-size:150%;weight:bold">'+name+'</td>'  for name in names])
+        return HTML(f"<table><tr>{title_columns}</tr><tr>{contant}</tr></table>")
+    return HTML(f"<table><tr>{contant}</tr></table>")
