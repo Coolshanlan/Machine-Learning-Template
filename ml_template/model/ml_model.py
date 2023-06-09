@@ -92,14 +92,15 @@ class Stack_Ensemble_Model(Ensemble_Model):
       else:
         model_preds, model_dict_preds=_model._model_predicts(stack_model_data)
       # evaluation_fn = calculate_metrics(['recall','precision','acc','f1score'])
-      print('===== Model pre-training evaluation =====')
+      print('----- Model pre-training evaluation -----')
       _model.evaluate(stack_model_data,stack_model_label,evaluation_fn=mean_absolute_error)
       model_preds = self.stack_input_transform(model_preds)
       self.stack_model.fit(model_preds,stack_model_label)
       if isinstance(self.stack_model,ML_Weighted_Model):
+        print('----- Stacking weights -----')
+        max_length_name = max([len(model_name) for model_name in  list(_model.model_dict.keys())])
         for midx,model_name in enumerate(list(_model.model_dict.keys())):
-          print(model_name,':',np.array(self.stack_model.weights[midx,:]))
-
+          eval("print('{:<2} {:^"+str(max_length_name)+"} : {}'.format(str(midx),model_name,['%.3f'% v for v in np.array(self.stack_model.weights[midx,:])]))")
 
     super().fit(data,label)
 
@@ -320,7 +321,7 @@ class ML_Weighted_Model():
 
 def weighted_stacking_analysis(cv_models,
                               feature_columns,
-                              fig1_size=(8,15),
+                              fig1_size=(12,8),
                               fig2_size=(30,30),
                               fig3_size=(8,20)):
 
@@ -328,6 +329,7 @@ def weighted_stacking_analysis(cv_models,
     cv_models = [cv_models]
 
   return_dict={}
+
 
   assert  isinstance(cv_models[0].stack_model, ML_Weighted_Model), 'only support ML_Weighted_Model'
   #==================== Model Weights ========================
@@ -350,7 +352,7 @@ def weighted_stacking_analysis(cv_models,
   if not os.path.exists('./figure'):
     os.mkdir('./figure')
   model_names=list(stacking_df.model.unique())
-  fig, ax = plt.subplots(2,1,figsize=fig1_size)
+  fig, ax = plt.subplots(1,2,figsize=fig1_size)
   sns.barplot(data=stacking_df, y='model',x='mean_weights',hue_order=model_names,ax=ax[0])
   stacking_df['class'] = stacking_df['class'].astype(str)
   ax[0].set_title('Model importance - mean')
@@ -358,6 +360,7 @@ def weighted_stacking_analysis(cv_models,
   sns.barplot(data=stacking_df, y='class',x='weights',hue='model',hue_order=model_names,ax=ax[1])
   ax[1].set_title('Model importance - class')
   plt.savefig('figure/Model_classes_importance.png')
+  plt.legend(bbox_to_anchor=(1.04, 1))
   plt.show()
 
   stacking_cls_df=stacking_df.groupby(by=['model','class']).weights.mean().reset_index(drop=False).sort_values(['class','weights'],ascending = [True, False]).set_index(['class','model'])
@@ -502,7 +505,7 @@ def regression_model():
                                 bagging_freq = 5, feature_fraction = 0.2319,
                                 feature_fraction_seed=9, bagging_seed=9,
                                 min_data_in_leaf =6, min_sum_hessian_in_leaf = 11,
-                                is_unbalance=True)
+                                is_unbalance=True,verbosity=-1)
 
   kernel =  WhiteKernel(noise_level=3.0) + DotProduct() * RBF() * Matern() * RBF(length_scale=2.0)  #+Exponentiation(kernel=RBF(length_scale=2.0),exponent=2)
   gpr = GaussianProcessRegressor(kernel=kernel)
@@ -555,7 +558,7 @@ def classification_model():
                                 bagging_freq = 5, feature_fraction = 0.2319,
                                 feature_fraction_seed=9, bagging_seed=9,
                                 min_data_in_leaf =6, min_sum_hessian_in_leaf = 11,
-                                is_unbalance=True)
+                                is_unbalance=True,verbosity=-1)
 
   kernel =  WhiteKernel(noise_level=3.0) + DotProduct() * RBF() * Matern() * RBF(length_scale=2.0)  #+Exponentiation(kernel=RBF(length_scale=2.0),exponent=2)
   gpr = GaussianProcessClassifier(kernel=kernel)

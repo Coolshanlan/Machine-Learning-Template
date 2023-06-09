@@ -1,5 +1,6 @@
 import pandas as pd
-from tqdm import tqdm
+from tqdm import  tqdm
+import tqdm as tq
 import copy
 from ..utils import KFold_Sampler
 import numpy as np
@@ -67,10 +68,12 @@ class MLModels():
     self.model_dict = model_dict_tmp
 
   def fit(self,data,label):
-    pbar = tqdm(self.model_dict.items(), total=self.num_models, leave=False, bar_format='{desc:<30}\t{percentage:2.0f}%|{bar:10}{r_bar}')
-    for model_name, model in pbar:
-      pbar.set_description(f'{model_name} Training...')
-      model.fit(data,label)
+    with tqdm(range(len(self.model_dict.keys())), position=0,total=self.num_models, leave=False, bar_format='{desc:<30}\t{percentage:2.0f}%|{bar:10}{r_bar}') as pbar:
+      for model_name, model in self.model_dict.items():
+        pbar.set_description(f'{model_name} Training...')
+        pbar.update()
+        model.fit(data,label)
+
 
   def predicts(self,data):
     return self.model_predicts(data)
