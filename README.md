@@ -1,5 +1,5 @@
 # Machine Learning Template
- This is a efficient machine learning template support ml model ensemble, logger, dataset and all utils that you need during training and inference.
+ This is a efficient machine learning template support ml model ensemble, trainable weighted sum ensemble method,logger, dataset and all utils that you need during training and inference.
 
 - <a href="#example_code">Example Code</a>
 - <a href="#features">Features</a>
