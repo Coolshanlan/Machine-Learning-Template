@@ -16,6 +16,7 @@ from sklearn.neighbors import KNeighborsRegressor,KNeighborsClassifier
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from catboost import CatBoostRegressor ,CatBoostClassifier
 from sklearn.metrics import mean_absolute_error
 
 import lightgbm as lgb
@@ -253,8 +254,9 @@ class ML_Weighted_Model():
       # one_hot_label = torch.nn.functional.one_hot(label,self.num_classes).to(torch.float32)
       return ce_loss #FocalLoss()(pred,one_hot_label)+ce_loss + bi_tempered_logistic_loss(pred,one_hot_label,0.8,1.2)
     def loss_reg_fn(pred,label):
-      label = label.to(device)
-      return nn.MSELoss()(pred,label.to(torch.float32))
+      return nn.MSELoss(reduction='mean')(pred.view(-1),label.view(-1).to(torch.float32))
+      # return nn.L1Loss()(pred,label.to(torch.float32))
+      # return ((pred-label.to(torch.float32))**2).view(-1).mean()
 
     self.model = Weighted_Model(num_model,num_classes)
     self.load_stacking=False
@@ -303,6 +305,8 @@ class ML_Weighted_Model():
         # _data = torch.tensor(_data).view(1,-1)
         # _label = torch.tensor(_label).view(-1)
       pred, (loss,eval) = self.model_instance.run_model(data,label,update=True)
+      # print(mean_squared_error(pred,label))
+      # print(loss)
     self.model_instance.inference(data)
 
   def predict_proba(self,data):
@@ -522,6 +526,9 @@ def regression_model():
               #'GP_Reg':gpr,
               'Huber_Reg':HuberRegressor(),
               'SVM':SVR(),
+              "Cat":CatBoostRegressor(
+                          learning_rate=1e-2, 
+                          loss_function='RMSE',verbose=0),
               'SVM_lin':SVR(kernel='linear'),
               'SVM_poly':SVR(kernel='poly'),
               'SVM_0.2':SVR(C=0.2),
@@ -575,6 +582,7 @@ def classification_model():
               'Bayesian':BayesianRidge(),
               'GP_Cls':gpr,
               'RC_Cls':RidgeClassifier(),
+              "Cat_cls":CatBoostClassifier(),
               'SVM':SVC(probability=True),
               'SVM_lin':SVC(kernel='linear',probability=True),
               'SVM_poly':SVC(kernel='poly',probability=True),
