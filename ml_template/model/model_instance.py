@@ -1,13 +1,4 @@
-import torch
-from torch.nn import init
-# from torch.cuda.amp import autocast
-from torch import autocast
-from torch.cuda.amp import GradScaler
-import torch.functional as F
-import numpy as np
-from tqdm import tqdm
-from sklearn.linear_model import LogisticRegression
-import os
+from .basic_import import *
 from ..utils import Recorder, init_weights, move_to, calculate_metrics
 
 
